@@ -23,8 +23,7 @@ import os
 
 import numpy as np
 
-from code.SDEs import bm_engine
-
+from code.SDEs import BM_engine as bm_engine
 _PROJECT_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 )

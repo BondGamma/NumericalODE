@@ -19,20 +19,17 @@ import sys
 
 import numpy as np
 import matplotlib
-matplotlib.use("Agg")  # headless backend; safe on any machine
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-# Make the package importable whether this file is run as a script
-# (`python code/experiments/exp0_simulate_bm.py`) or as a module
-# (`python -m code.experiments.exp0_simulate_bm`), by putting the project root
-# on sys.path.
+
 _PROJECT_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 )
 sys.path.insert(0, _PROJECT_ROOT)
 
 from code.tools import mc                       # noqa: E402
-from code.SDEs import bm_engine                 # noqa: E402
+from code.SDEs import BM_engine as bm_engine                 # noqa: E402
 from code.SDEs import gbm                       # noqa: E402
 from code.SDEs import nasv                      # noqa: E402
 from code.solvers import em as em_solver        # noqa: E402
@@ -152,7 +149,7 @@ def main():
     n_max = 1024
     T = 1.0
     rho = nasv.NA_SV_RHO
-    n_list = [128, 256, 512]            # each divides n_max
+    n_list = [128, 256, 512]            
     dt = T / n_max
 
     os.makedirs(FIGURES_DIR, exist_ok=True)
