@@ -41,7 +41,7 @@ project-repo/
 │   ├── SDEs/          # model definitions + Brownian-motion engine
 │   │   ├── bm_engine.py   # standard_bm, correlated_bm_pair, extract_dw
 │   │   ├── gbm.py         # geometric Brownian motion (SDE)
-│   │   └── nasv.py        # noise-assisted stochastic volatility (SDE)
+│   │   └── nasv.py        # none-affine stochastic volatility (SDE)
 │   ├── solvers/       # time-stepping schemes
 │   │   ├── em.py          # Euler–Maruyama
 │   │   └── milstein.py    # Milstein
