@@ -15,7 +15,7 @@ construction.  The logistic g keeps instantaneous volatility in
 joint process non-affine; no closed-form transition / practical exact sampler is
 known, so numerical SDE integration is part of the model solution.
 
-This module provides the single requested function:
+This module provides the single function:
 
     dXdY_rhs     Euler-Maruyama increment of the state z = (X, Y) as a length-2
                  numpy array.  There is NO Milstein correction here: the scalar
@@ -26,7 +26,6 @@ This module provides the single requested function:
 
 import numpy as np
 
-# Reproducible benchmark (problem pack Section 4).
 NA_SV_S0 = 100.0
 NA_SV_Y0 = 0.0
 NA_SV_MU = 0.05

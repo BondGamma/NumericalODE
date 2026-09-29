@@ -1,6 +1,5 @@
 """
-Euler-Maruyama (EM) solver for the SDE models of Direction 4 (problem pack
-Section 4).
+Euler-Maruyama (EM) solver for the SDE models.
 
 The solver takes a `model` name because the two SDEs need different stepping
 algorithms:

@@ -23,11 +23,11 @@ _Last updated 2026-09-27._
 | Workstream | Status | Where |
 |---|---|---|
 | Experiment 0 — "same Brownian motion" smoke test + confidence band and cross-sections illustration| ✅ Done | `code/experiments/exp0_simulate_bm.py` |
-| Experiment 1 — GBM convergence analysis | 🚧 Stub | Being implemented by Artem |
+| Experiment 1 — GBM convergence analysis | ✅ Done	 | Being implemented by Artem |
 | Experiment 2 — GBM positivity analysis | ✅ Done | `code/experiments/exp2_positivity_analysis.ipynb` Rewriting as a .py file|
-| Experiment 3 — NASV convergence analysis | 🚧 Stub | Being implemented by Artem |
-| Experiment 4 — cost vs. accuracy analysis | 🚧 Stub | Being implemented by Artem |
-| `run_all.py` entry point | 🚧 Stub | implemented for exp 0-3 |
+| Experiment 3 — NASV convergence analysis | ✅ Done	 | Being implemented by Artem |
+| Experiment 4 — cost vs. accuracy analysis | ✅ Done	 | Being implemented by Artem |
+| `run_all.py` entry point | 🚧 Stub | Will add pip Requirements later |
 | Slides & report | 🚧 Draft | `report/projection_1.tex` |
 
 ## Repository layout

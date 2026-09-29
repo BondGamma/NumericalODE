@@ -3,10 +3,6 @@ Experiment 1 — GBM convergence analysis (self-contained).
 
 Measures strong convergence order of Euler-Maruyama and Milstein solvers
 for Geometric Brownian Motion against the exact solution.
-
-Only external dependency:
-    code/SDEs/BM_engine.py  ->  standard_bm, extract_dw
-Everything else (exact GBM, EM/Milstein solvers, MC driver) is defined here.
 """
 import os
 import sys

@@ -1,6 +1,5 @@
 """
 Experiment 3 — NASV Convergence Analysis
-Direction ④: Non-Affine Stochastic Volatility Model
 ====================================================
 Model:
     dX_t = (mu - 0.5 * g(Y_t)^2) dt + g(Y_t) dW_t^(1)
@@ -10,22 +9,6 @@ Model:
 
 We apply Euler–Maruyama to (X, Y) and recover S = exp(X).
 
-Design (both strong and weak):
-  * ONE fixed fine reference grid  n_fine_ref  chosen once.
-  * Fine Brownian increments generated ONCE per batch and reused at every
-    coarse level (common random numbers / CRN).
-  * Coarse paths are obtained by summing the fine increments into blocks.
-  * Weak experiment: two references on the SAME Brownian path
-    (main + tolerance check). Their difference is pure discretisation.
-  * Weak experiment is BATCHED over paths: memory stays small, cache
-    stays warm, numpy RNG uses the fast float32 path.
-
-Outputs (saved to repo-root figures/):
-  figures/exp3_nasv_convergence.png
-  figures/exp3_nasv_distribution_check.png
-
-Run (from repo root):
-    python code/experiments/exp3_nasv_convergence.py
 """
 
 import os
@@ -305,7 +288,7 @@ def weak_convergence_experiment(
           f"report at most {n_digits} fractional digits")
     print()
 
-    payoff_ref = payoffs_A        # the tighter one is the truth
+    payoff_ref = payoffs_A        # the tighter one is the truth (This is basically a payoff)
     reference_payoff = ref_hi
 
     hs, payoffs, biases = [], [], []

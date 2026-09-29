@@ -1,5 +1,5 @@
 """
-Milstein solver for the SDE models of Direction 4 (problem pack Section 4).
+Milstein solver for the SDE models.
 
 For a scalar SDE with state-dependent noise the Milstein correction raises the
 strong order from 1/2 (Euler-Maruyama) to 1:

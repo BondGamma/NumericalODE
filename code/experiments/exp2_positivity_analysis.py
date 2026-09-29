@@ -1,8 +1,6 @@
 """
 Experiment 2 — Positivity-Preserving Analysis of Geometric Brownian Motion
 ==========================================================================
-Direction ④, Optional ☆☆☆ "positivity" task.
-
 Model:
     dS = mu S dt + sigma S dW,   S(0) = S0 > 0
     S(t) = S0 exp((mu - 1/2 sigma^2) t + sigma W(t))     (exact, always > 0)
@@ -15,12 +13,6 @@ Discretising the price directly:
 With the benchmark (mu=0.05, sigma=0.20) negativity is practically invisible,
 so all experiments run in a *stress regime* sigma = 2.0 to expose the effect.
 
-Outputs (saved to repo-root figures/, same convention as exp1/exp3):
-  figures/exp2_em_tail.png
-  figures/exp2_milstein_parabola.png
-  figures/exp2_milstein_tail.png
-  figures/exp2_negativity_vs_dt.png
-  figures/exp2_negative_path.png
 
 """
 
@@ -50,7 +42,7 @@ os.makedirs(FIGURES_DIR, exist_ok=True)
 
 
 # ============================================================================
-# 2. THEORY HELPERS
+# 2.  HELPERS
 # ============================================================================
 def p_em(dt):
     """Per-step EM negativity probability   Phi(-(1 + mu dt) / (sigma sqrt(dt)))."""
@@ -455,7 +447,7 @@ def section_option_prices(M=1_000_000, K=100.0):
     print("Analytic expectation:  call E[(S_T-K)^+] = %.4f    "
           "put E[(K-S_T)^+] = %.4f\n" % (call_ref, put_ref))
 
-    # --- Put decomposition ------------------------------------------------
+    # --- OPTION Put decomposition ------------------------------------------------
     print("PUT — raw vs floored S_T (gap = E[|S_T| 1{S_T<0}] = pure negativity) :")
     print("  dt        n   scheme    P(S_T<0)   put raw   put floor    gap      analytic")
     for dt in [1.0, 0.5, 1/3, 0.25, 0.1]:

@@ -1,17 +1,5 @@
 """
 Experiment 0 — smoke test of the "same Brownian motion" pipeline.
-
-Workflow:
-  1. tools/mc.simulate generates fine Brownian increments at the maximum
-     resolution n_max and saves gbm_dw_log / nasv_dw_log under data/.
-  2. SDEs/bm_engine.extract_dw coarsens a log to any smaller step count n
-     (n | n_max) by summing blocks, so every step size sees the SAME
-     underlying Brownian motion.
-  3. This script plots each simulated Brownian path (fine) and overlays the
-     coarse samples at the chosen n's; they must coincide, which confirms the
-     unification.
-
-Output: 4 PNGs in figures/ — 2 simulations x 2 BM engines (standard, pairing).
 """
 
 import os
@@ -157,8 +145,8 @@ def main():
     # 1) simulate + save the fine logs, then reload to test the round-trip.
     mc.simulate("standard", n_sims, n_max, T=T, seed=0)
     mc.simulate("pairing", n_sims, n_max, T=T, rho=rho, seed=0)
-    gbm_log = mc.load("standard")       # (n_sims, n_max)
-    nasv_log = mc.load("pairing")       # (2, n_sims, n_max)
+    gbm_log = mc.load("standard")
+    nasv_log = mc.load("pairing")
 
     # 2) + 3) visualise each simulation: fine path + coarse samples overlaid.
     for i in range(n_sims):
@@ -185,7 +173,7 @@ def main():
 
     print("wrote 4 figures to %s" % FIGURES_DIR)
 
-    # 4) advanced plotters: confidence band + cross-section distributions.
+    # 4) advanced plotters MAGIIIIC: confidence band + cross-section distributions.
     _demo_band_plots()
 
 
