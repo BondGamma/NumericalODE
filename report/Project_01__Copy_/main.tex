@@ -1,0 +1,860 @@
+% ============================================================
+% ODE IVP Project — LaTeX Report Template
+% Compile: pdflatex report.tex  (twice for the TOC)
+% Structure follows the project brief: Background -> Model ->
+% Methods -> Stability -> Numerical experiments -> Conclusions.
+%
+% This is the MERGED template: it combines the project-specific
+% guidance for Project 1 (ODE IVPs) with the course-level report
+% skeleton (algorithm environment, theorem environments, MMS
+% convergence table, AI Transparency Log and ICS appendices).
+% ============================================================
+
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{geometry}
+\geometry{a4paper, margin=2.5cm}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{bm}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{mdframed}
+
+% --- colors ---
+\definecolor{lecture}{RGB}{70,130,180}
+\definecolor{seminar}{RGB}{205,92,92}
+\definecolor{formbg}{RGB}{250,250,245}
+\definecolor{formframe}{RGB}{180,170,140}
+
+% --- code listing style (Python) ---
+\lstset{
+    language=Python,
+    basicstyle=\ttfamily\scriptsize,
+    keywordstyle=\color{blue}\bfseries,
+    commentstyle=\color{green!40!black},
+    stringstyle=\color{red!70!black},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    frame=single,
+    breaklines=true,
+    showstringspaces=false,
+    tabsize=4,
+    captionpos=b,
+}
+
+% --- theorem-like environments (course-level set) ---
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{assumption}[theorem]{Assumption}
+\newtheorem{example}[theorem]{Example}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+% --- algorithm style ---
+\algrenewcommand{\algorithmicrequire}{\textbf{Input:}}
+\algrenewcommand{\algorithmicensure}{\textbf{Output:}}
+\algrenewcommand{\algorithmiccomment}[1]{\hfill\textcolor{gray}{\# #1}}
+
+% --- form box (for appendices) ---
+\newmdenv[
+    backgroundcolor=formbg,
+    linecolor=formframe,
+    linewidth=0.8pt,
+    roundcorner=3pt,
+    innermargin=5pt,
+    outermargin=5pt,
+    innertopmargin=8pt,
+    innerbottommargin=8pt
+]{formbox}
+
+\title{\textbf{Numerical Solution of \texttt{<YOUR PROBLEM>}}\\[2mm]
+\large Project 1 (ODE IVP) Report}
+\author{
+    Team \#\texttt{<N>} \\
+    \small \texttt{<name1>, <id1> (Project Manager)} \quad
+    \texttt{<name2>, <id2> (Mathematical Theory)} \\
+    \small \texttt{<name3>, <id3> (Algorithm Implementation)} \quad
+    \texttt{<name4>, <id4> (Visualization \& Report)} \\
+    \small \texttt{<name5>, <id5> (Testing \& Validation)} \\
+    \small Department of Applied Mathematics
+}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\noindent
+[150--250 words answering: (1) what problem and why interesting; (2) what methods
+you implemented; (3) key findings (convergence rates, stability observations);
+(4) the main limitation or open question.]
+\end{abstract}
+
+\noindent\textbf{Keywords:} [e.g., Runge--Kutta methods, stiffness, von Neumann
+stability, absolute stability, adaptive stepping]
+
+\tableofcontents
+\newpage
+
+% ============================================================
+\section{Introduction and Motivation}
+% ============================================================
+
+A deterministic ordinary differential equation produces a single future for a single initial condition. Asset prices do not behave in this way: two investors who hold the same stock on the same day will not see the same price path tomorrow. Randomness therefore has to enter the model itself, and the standard way to do this is to add a Brownian term to the differential equation. The result is a stochastic differential equation (SDE) of the general form
+\begin{equation}
+    dX_t = a(X_t, t)\,dt + b(X_t, t)\,dW_t,
+    \label{eq:general-sde}
+\end{equation}
+where $a$ is the drift, $b$ is the diffusion coefficient, and $W_t$ is a standard Brownian motion. The two coefficients play different roles. The drift describes the average tendency of the process, while the diffusion describes how strongly random shocks are amplified. Their relative size determines how much of the observed variation is systematic and how much is noise.
+The classical starting point is the geometric Brownian motion (GBM) model of Black, Merton and Scholes~\cite{blackscholes}, in which both the drift and the diffusion are proportional to the current price:
+\begin{equation}
+    dS_t = \mu S_t\,dt + \sigma S_t\,dW_t .
+    \label{eq:gbm}
+\end{equation}
+Because of its exponential structure, \eqref{eq:gbm} can be solved in closed form, and its transition law is known exactly. This makes GBM an ideal \emph{verification} problem: any code written for it can be compared against a reference that contains no discretisation error at all.
+The same property, however, makes GBM unsuitable as a \emph{modelling} problem. Constant volatility cannot reproduce two features that are easy to observe in real option markets: the implied volatility smile and the tendency of volatility to rise when prices fall. Modelling these effects requires the volatility itself to be a random process, which leads to the second model studied here. The report therefore uses two models with deliberately different status: GBM supplies an exact benchmark, while the stochastic volatility model is a problem in which numerical integration is genuinely part of the solution rather than a check of a known answer.
+\subsubsection{Ito's Lemma}
+\label{sec:ito}
+Equation \eqref{eq:gbm} is written in the price $S_t$, but it is more convenient to work with the log-price $X_t = \log S_t$. The chain rule of ordinary calculus cannot be used for this change of variable, because a Brownian path has infinite variation. The correct tool is It\^o's lemma: for $f \in C^{1,2}$ and $X_t$ satisfying \eqref{eq:general-sde},
+\begin{equation}
+    df(X_t, t) =
+    \left( \frac{\partial f}{\partial t}
+         + a \frac{\partial f}{\partial x}
+         + \tfrac12 b^2 \frac{\partial^2 f}{\partial x^2} \right) dt
+    + b \frac{\partial f}{\partial x}\, dW_t .
+    \label{eq:ito}
+\end{equation}
+The extra second-order term in \eqref{eq:ito} is the essential difference between stochastic and deterministic calculus.
+Applying \eqref{eq:ito} with $f(s) = \log s$, $a = \mu S_t$ and $b = \sigma S_t$ gives
+\begin{equation}
+    dX_t = \left( \mu - \tfrac12 \sigma^2 \right) dt + \sigma\, dW_t ,
+    \label{eq:logprice}
+\end{equation}
+so the log-price satisfies an SDE with \emph{constant} coefficients. The $-\tfrac12\sigma^2$ term is not a modelling choice; it is forced by It\^o's lemma, and dropping it changes the expected value of the price by a factor of $e^{\sigma^2 T/2}$. Integrating \eqref{eq:logprice} gives the exact solution
+\begin{equation}
+    S(T) = S_0 \exp\left[ \left( \mu - \tfrac12 \sigma^2 \right) T + \sigma W(T) \right] .
+    \label{eq:gbm-exact}
+\end{equation}
+Two consequences of \eqref{eq:logprice} shape the whole numerical study, and they are made precise in Section~\ref{sec:gbm-model}. Since the drift and the diffusion are constant, the transition law of $X$ is exactly Gaussian, so the updating rule applied to $X$ reproduces the exact solution at every grid point. At the same time, the constant diffusion means the noise is additive: the Milstein correction, which is proportional to the derivative of the diffusion coefficient, vanishes identically on $X$, and no strong order can be measured there. To obtain distinct orders, the price $S$ itself must be discretised, where the noise $\sigma S$ does depend on the state.
+We finally note the convention issue. The It\^o form is used throughout, which is the standard convention in finance and is the reason the $-\tfrac12\sigma^2$ correction appears above. The same convention produces the $-\tfrac12 g(Y_t)^2$ term in the stochastic volatility model introduced next.
+\subsubsection{Non-Affine Stochastic Volatility}
+\label{sec:non-affine}
+The observation that motivates a stochastic volatility model is simple: implied volatility varies with strike and maturity, and it tends to increase when the underlying price falls. A constant $\sigma$ cannot generate either pattern. The most widely used remedy is the Heston model~\cite{heston}, in which the variance $V_t$ follows a mean-reverting square-root diffusion. Heston belongs to the class of \emph{affine} diffusions: both its drift and its covariance are affine functions of the state, and consequently the characteristic function satisfies a Riccati ordinary differential equation that can be solved in closed form. Prices are then recovered by Fourier inversion. Affine structure is therefore not a technical detail; it is exactly what makes a model analytically tractable~\cite{dfs}.
+The model used in this report keeps the economic motivation but gives up that tractability. Writing $X_t = \log S_t$, its two equations are
+$$
+    dX_t = \left( \mu - \tfrac12 g(Y_t)^2 \right) dt + g(Y_t)\, dW_t^{(1)},
+    \qquad
+    dY_t = \kappa (\theta - Y_t)\, dt + \xi \sqrt{1 + Y_t^{2}}\; dW_t^{(2)},
+$$
+with a bounded logistic volatility function $g$ and correlated Brownian motions. The factor $Y_t$ is mean-reverting, so volatility is persistent rather than independent from period to period, and a negative correlation produces the leverage effect described above. The logistic function keeps the instantaneous volatility strictly between two positive bounds, which removes the vanishing- and negative-variance pathologies that arise in square-root models. Simulating $X$ rather than $S$ keeps the price positive by construction. The system is stated formally, with all parameter values, in Section~\ref{sec:nasv-model}.
+What makes this model \emph{non-affine} is visible in the two coefficients. The diffusion of $Y_t$ is $\xi\sqrt{1 + Y_t^{2}}$, which is not an affine function of $Y_t$, and the drift of $X_t$ depends on the square of a logistic function. Both facts break the affine structure described above. The model therefore has no closed-form transition density, no closed-form characteristic function, and no practical exact sampler. This distinction should be stated precisely: the equations do have an explicit integral representation, but it is not a usable simulation formula. Time discretisation is consequently part of the model solution, and the numerical reference against which coarse schemes are measured must itself be validated by refinement, rather than taken from a formula.
+\subsection{Mathematical Models}
+\label{sec:models}
+This section fixes the notation and states the two models precisely. Section~\ref{sec:bm} defines the driving noise, Section~\ref{sec:gbm-model} states the GBM benchmark, and Section~\ref{sec:nasv-model} states the non-affine stochastic volatility model. All parameter values given here are the values used by the code described in Section~3, and both models are posed on the interval $0 \le t \le T = 1$.
+\subsubsection{Brownian Motion}
+\label{sec:bm}
+\begin{definition}[Standard Brownian motion]
+\label{def:bm}
+A real-valued process $\{W_t\}_{t \ge 0}$ on a filtered probability space $(\Omega, \mathcal{F}, (\mathcal{F}_t)_{t \ge 0}, \mathbb{P})$ is a \emph{standard Brownian motion} if
+\begin{enumerate}[label=(\roman*), leftmargin=2em]
+    \item $W_0 = 0$ almost surely;
+    \item for every $0 \le s < t$ the increment $W_t - W_s$ is independent of $\mathcal{F}_s$ and $W_t - W_s \sim \mathcal{N}(0, t - s)$;
+    \item the map $t \mapsto W_t$ is continuous almost surely.
+\end{enumerate}
+\end{definition}
+Three properties of this process are used repeatedly below. First, $\mathbb{E}[W_t] = 0$ and $\operatorname{Var}[W_t] = t$, and $\{W_t\}$ is a martingale. Second, the quadratic variation of a Brownian path is $[W]_t = t$, which is why the ordinary chain rule fails and the second-order term in It\^o's lemma appears. Third, Brownian paths are continuous but nowhere differentiable and have infinite total variation on every interval, so \eqref{eq:logprice} cannot be read as a classical differential equation.
+To couple two sources of randomness, we use a two-dimensional Brownian motion $\bm{W}_t = (W_t^{(1)}, W_t^{(2)})$ with
+\begin{equation}
+    d\langle W^{(1)}, W^{(2)} \rangle_t = \rho\, dt,
+    \qquad |\rho| < 1 .
+    \label{eq:correlation}
+\end{equation}
+Such a pair can always be built from two independent standard Brownian motions $B^{(1)}$ and $B^{(2)}$ by setting $W^{(1)} = B^{(1)}$ and $W^{(2)} = \rho B^{(1)} + \sqrt{1 - \rho^2}\, B^{(2)}$, which is the Cholesky factorisation of the correlation matrix. On a uniform grid $t_n = n h$ with $h = T / N$, this gives the increment convention used throughout the code:
+\begin{equation}
+    \Delta W_n^{(1)} = \sqrt{h}\, Z_{1,n},
+    \qquad
+    \Delta W_n^{(2)} = \sqrt{h}\left( \rho Z_{1,n} + \sqrt{1 - \rho^2}\, Z_{2,n} \right),
+    \label{eq:increments}
+\end{equation}
+with $Z_{1,n}, Z_{2,n} \sim \mathcal{N}(0, 1)$ independent. Each increment then has variance $h$, and $\operatorname{Cov}\!\left( \Delta W_n^{(1)}, \Delta W_n^{(2)} \right) = \rho h$. The symbol $h$ is used for the step size in this report; the corresponding variable in the code is named \texttt{dt}.
+\subsubsection{Geometric Brownian Motion}
+\label{sec:gbm-model}
+\paragraph{Notation and Parameters}
+The single state variable is the price $S_t \in (0, \infty)$ itself, so the state space has dimension one. The problem pack does not prescribe GBM parameters, since GBM serves here only as a verification benchmark; the values below are therefore chosen explicitly and used in every GBM experiment.
+\begin{table}[H]
+\centering
+\begin{tabular}{llll}
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Value} & \textbf{Unit} \\
+\midrule
+$S_0$    & initial price        & $100$   & --- \\
+$\mu$    & drift rate           & $0.05$  & yr$^{-1}$ \\
+$\sigma$ & volatility           & $0.20$  & yr$^{-1/2}$ \\
+$T$      & final time           & $1$     & yr \\
+$h$      & step size, $h = T/N$ & varies  & yr \\
+\bottomrule
+\end{tabular}
+\caption{GBM benchmark parameters and step size.}
+\label{tab:gbm-params}
+\end{table}
+\paragraph{SDE System}
+\begin{equation}
+    dS_t = \mu S_t\, dt + \sigma S_t\, dW_t,
+    \qquad S_0 = 100,
+    \qquad 0 \le t \le T = 1 .
+    \label{eq:gbm-model}
+\end{equation}
+Both coefficients are proportional to $S_t$, so they are globally Lipschitz and grow at most linearly. The model is autonomous: neither coefficient depends explicitly on $t$.
+\paragraph{Exact Solution, Transition and Moments}
+The continuous-time solution was derived in Section~\ref{sec:ito} and is given by \eqref{eq:gbm-exact}. Because the drift and the diffusion of the log-price \eqref{eq:logprice} are constant, the transition law over one step is exactly Gaussian:
+\begin{equation}
+    X_{n+1} \mid X_n \;\sim\; \mathcal{N}\!\left( X_n + \left( \mu - \tfrac12 \sigma^2 \right) h,\; \sigma^2 h \right),
+    \qquad X_n = \log S_n .
+    \label{eq:gbm-transition}
+\end{equation}
+Sampling this transition gives the exact simulation scheme
+\begin{equation}
+    X_{n+1} = X_n + \left( \mu - \tfrac12 \sigma^2 \right) h + \sigma \sqrt{h}\, Z_n,
+    \qquad
+    S_{n+1} = \exp\left( X_{n+1} \right),
+    \label{eq:gbm-sampler}
+\end{equation}
+with $Z_n \sim \mathcal{N}(0,1)$ independent. Iterating \eqref{eq:gbm-sampler} is equivalent to applying Euler--Maruyama to the log-price equation and exponentiating: the two are identical at every grid point, so \eqref{eq:gbm-sampler} carries \emph{no discretisation error}. This is what makes it the reference in the strong convergence study of Section~\ref{sec:experiments}, and it is also why no convergence order can be measured on the log-price scale.
+The exact first and second moments follow directly from \eqref{eq:gbm-exact}:
+\begin{equation}
+    \mathbb{E}[S(T)] = S_0 e^{\mu T} = 105.1271,
+    \qquad
+    \operatorname{Var}[S(T)] = S_0^2 e^{2\mu T} \left( e^{\sigma^2 T} - 1 \right) = 451.03 .
+    \label{eq:gbm-moments}
+\end{equation}
+The corresponding standard deviation is $21.24$, which sets the Monte Carlo sample size needed to resolve a given bias in Section~\ref{sec:experiments}. The distribution of $S(T)$ is lognormal with parameters $\left( \log S_0 + \left( \mu - \tfrac12\sigma^2 \right) T,\; \sigma^2 T \right)$, and this is the law against which the simulated distribution is compared.
+\subsubsection{Non-Affine Stochastic Volatility}
+\label{sec:nasv-model}
+\paragraph{Notation and Parameters}
+The state is the pair $z_t = (X_t, Y_t) \in \mathbb{R}^2$, where $X_t = \log S_t$ is the log-price and $Y_t$ is a dimensionless volatility factor. The price is recovered as $S_t = e^{X_t}$, so $S_t > 0$ holds by construction. The parameters are those of the reproducible benchmark in the problem pack.
+\begin{table}[H]
+\centering
+\begin{tabular}{llll}
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Value} & \textbf{Unit} \\
+\midrule
+$S_0$                         & initial price                  & $100$  & --- \\
+$Y_0$                         & initial volatility factor      & $0$    & --- \\
+$\mu$                         & drift rate of the log-price    & $0.05$ & yr$^{-1}$ \\
+$\kappa$                      & mean-reversion speed of $Y$    & $2$    & yr$^{-1}$ \\
+$\theta$                      & long-run level of $Y$          & $-0.2$ & --- \\
+$\xi$                         & volatility-of-volatility       & $0.6$  & yr$^{-1/2}$ \\
+$\rho$                        & correlation of $W^{(1)}, W^{(2)}$ & $-0.7$ & --- \\
+$\sigma_{\min}$               & lower bound of $g$             & $0.10$ & yr$^{-1/2}$ \\
+$\sigma_{\max}$               & upper bound of $g$             & $0.50$ & yr$^{-1/2}$ \\
+$T$                           & final time                     & $1$    & yr \\
+\bottomrule
+\end{tabular}
+\caption{Non-affine stochastic volatility benchmark parameters.}
+\label{tab:nasv-params}
+\end{table}
+Two derived quantities are useful for orientation. Since $g$ is logistic, $g(0) = (\sigma_{\min} + \sigma_{\max})/2 = 0.30$ is the instantaneous volatility at $t = 0$, while $g(\theta) = 0.2801$ is the level that volatility reverts to. Because $Y_0 = 0 > \theta$, the volatility factor starts above its long-run level and drifts downwards over the year.
+\paragraph{SDE System}
+\begin{align}
+    dX_t &= \left( \mu - \tfrac12 g(Y_t)^2 \right) dt + g(Y_t)\, dW_t^{(1)},
+    \label{eq:nasv-model-x} \\[2pt]
+    dY_t &= \kappa (\theta - Y_t)\, dt + \xi \sqrt{1 + Y_t^{2}}\; dW_t^{(2)},
+    \label{eq:nasv-model-y}
+\end{align}
+with the bounded logistic volatility function
+\begin{equation}
+    g(y) = \sigma_{\min} + \frac{\sigma_{\max} - \sigma_{\min}}{1 + e^{-y}},
+    \qquad 0 < \sigma_{\min} < \sigma_{\max},
+    \label{eq:nasv-g}
+\end{equation}
+and the correlation \eqref{eq:correlation}. The initial condition is $(X_0, Y_0) = (\log 100,\, 0)$ and the interval is again $0 \le t \le T = 1$. The system is autonomous. The drift of $X$ depends on $Y$ only, so $X_t$ does not feed back into $Y_t$; the pair is one-way coupled.
+\begin{assumption}[Regularity of the coefficients]
+\label{ass:regularity}
+For both systems \eqref{eq:gbm-model} and \eqref{eq:nasv-model-x}--\eqref{eq:nasv-model-y}, the drift and diffusion coefficients are globally Lipschitz and satisfy a linear growth bound.
+\end{assumption}
+Assumption~\ref{ass:regularity} is easy to verify for these two models, and the constants are small. For the logistic function, $g'(y) \le (\sigma_{\max} - \sigma_{\min})/4 = 0.10$, so $g$ is Lipschitz with constant $0.10$ and bounded by $0.50$. The drift of $X$ depends on $Y$ through $\tfrac12 g^2$, whose derivative is at most $g g' \le 0.05$. The diffusion of $Y$ satisfies $\left| \xi \sqrt{1 + y^2} \right| \le \xi (1 + |y|)$, so it grows linearly with constant $\xi = 0.6$ and is Lipschitz with the same constant. Because these bounds hold uniformly, a unique strong solution of each system exists for all $t \ge 0$. Assumption~\ref{ass:regularity} is exactly the hypothesis invoked by the convergence statements in Section~\ref{sec:convergence}, so it is stated here once and referenced there.
+\begin{remark}[An exact identity that survives]
+\label{rem:nasv-mean}
+The boundedness of $g$ gives one exact result even though the model is not tractable. Writing the price equation in the form $dS_t = \mu S_t\, dt + g(Y_t) S_t\, dW_t^{(1)}$, the discounted price $S_t e^{-\mu t}$ is a local martingale whose diffusion coefficient is bounded. Novikov's condition therefore holds, since $\tfrac12 \int_0^T g(Y_u)^2\, du \le \tfrac12 \sigma_{\max}^2 T = 0.125$ is a deterministic bound, and consequently
+\begin{equation}
+    \mathbb{E}[S_T] = S_0 e^{\mu T} = 105.1271 .
+    \label{eq:nasv-mean}
+\end{equation}
+This identity is exact and independent of $\kappa, \theta, \xi, \rho, \sigma_{\min}$ and $\sigma_{\max}$. It is used in Section~\ref{sec:impl-verify} as a hard test of the implementation, because an error in the $-\tfrac12 g(Y_t)^2$ term of \eqref{eq:nasv-model-x} would shift the sample mean away from $105.1271$ by a detectable amount.
+\end{remark}
+What the model does \emph{not} provide is an analytically usable transition law. As explained in Section~\ref{sec:non-affine}, the quadratic dependence of the variance on $Y_t$ destroys the affine structure, so there is no closed-form transition density, no closed-form characteristic function and no practical exact sampler. Discretising \eqref{eq:nasv-model-x}--\eqref{eq:nasv-model-y} is therefore part of the solution of the model, and the reference used in Section~\ref{sec:experiments} is a finely resolved numerical solution rather than a formula.
+\subsection{Overview of the Report}
+Section~\ref{sec:discretisation} derives the two discrete schemes, explains where their convergence orders come from, and discusses which of the usual ODE tools do and do not transfer to SDEs. Section~\ref{sec:implementation} describes the implementation, the shared-path Brownian engine and the checks applied to the code before any result is quoted. Section~\ref{sec:experiments} presents the numerical experiments, and Section~\ref{sec:conclusions} concludes.
+\newpage
+
+\newpage
+% ============================================================
+\section{Discretisation and Analysis}
+% ============================================================
+This section derives the two schemes used for GBM and the scheme used for the non-affine model, explains where their convergence orders come from, and states clearly which of the usual ODE tools do and do not transfer to SDEs. All statements below refer to the models of Section~\ref{sec:gbm-model} and Section~\ref{sec:nasv-model}, and to Assumption~\ref{ass:regularity}.
+\subsection{Discrete Schemes}
+\label{sec:schemes}
+\subsubsection{Euler--Maruyama}
+Consider the general scalar It\^o SDE $dX_t = a(X_t)\,dt + b(X_t)\,dW_t$. Integrating over one step $[t_n, t_{n+1}]$ with $h = t_{n+1} - t_n$ gives
+\begin{equation}
+    X_{n+1} = X_n + \int_{t_n}^{t_{n+1}} a(X_s)\, ds + \int_{t_n}^{t_{n+1}} b(X_s)\, dW_s .
+    \label{eq:integral-form}
+\end{equation}
+The Euler--Maruyama (EM) scheme is obtained by freezing both integrands at the left endpoint:
+\begin{equation}
+    X_{n+1} = X_n + a(X_n)\, h + b(X_n)\, \Delta W_n,
+    \qquad \Delta W_n = W_{t_{n+1}} - W_{t_n} .
+    \label{eq:em-general}
+\end{equation}
+The deterministic integral is approximated by a rectangle rule and the It\^o integral by its integrand at the left endpoint; both approximations are consistent to first order.
+Applied to the two models of this report, \eqref{eq:em-general} gives
+\begin{align}
+    \text{(GBM, price)} \quad
+    S_{n+1} &= S_n + \mu S_n h + \sigma S_n \Delta W_n,
+    \label{eq:em-gbm} \\[2pt]
+    \text{(GBM, log-price)} \quad
+    X_{n+1} &= X_n + \left( \mu - \tfrac12 \sigma^2 \right) h + \sigma \Delta W_n,
+    \label{eq:em-gbm-log} \\[2pt]
+    \text{(non-affine SV)} \quad
+    X_{n+1} &= X_n + \left( \mu - \tfrac12 g(Y_n)^2 \right) h + g(Y_n) \Delta W_n^{(1)}, \notag \\[2pt]
+    Y_{n+1} &= Y_n + \kappa (\theta - Y_n) h + \xi \sqrt{1 + Y_n^{2}}\, \Delta W_n^{(2)} .
+    \label{eq:em-nasv}
+\end{align}
+Equation~\eqref{eq:em-gbm-log} is the scheme implemented as \texttt{dX\_rhs} in \texttt{SDEs/gbm.py}, and \eqref{eq:em-gbm} as \texttt{dS\_rhs}. Equations~\eqref{eq:em-nasv} are implemented as \texttt{dXdY\_rhs} in \texttt{SDEs/nasv.py}.
+\subsubsection{Milstein}
+The Milstein scheme~\cite{milstein} keeps the first stochastic correction that EM discards. To derive it, expand the diffusion coefficient along the path,
+\begin{equation}
+    b(X_s) = b(X_n) + b'(X_n)(X_s - X_n) + \mathcal{O}\!\left( (X_s - X_n)^2 \right),
+\end{equation}
+and use the leading behaviour $X_s - X_n \approx b(X_n)(W_s - W_n)$, valid at the order required. The It\^o integral in \eqref{eq:integral-form} then becomes
+\begin{equation}
+    \int_{t_n}^{t_{n+1}} b(X_s)\, dW_s
+    \approx b(X_n)\, \Delta W_n + b(X_n) b'(X_n) \int_{t_n}^{t_{n+1}} (W_s - W_n)\, dW_s .
+    \label{eq:milstein-integral}
+\end{equation}
+The remaining It\^o integral is elementary. Applying It\^o's lemma \eqref{eq:ito} to $f(w) = \tfrac12 w^2$ gives $d\!\left( \tfrac12 W_s^2 \right) = W_s\, dW_s + \tfrac12 ds$, hence
+\begin{equation}
+    \int_{t_n}^{t_{n+1}} (W_s - W_n)\, dW_s = \tfrac12 \left( \Delta W_n^2 - h \right).
+    \label{eq:ito-key}
+\end{equation}
+Substituting \eqref{eq:ito-key} into \eqref{eq:milstein-integral} and neglecting the higher-order terms gives the Milstein scheme
+\begin{equation}
+    X_{n+1} = X_n + a(X_n) h + b(X_n) \Delta W_n + \tfrac12 b(X_n) b'(X_n) \left( \Delta W_n^2 - h \right).
+    \label{eq:milstein-general}
+\end{equation}
+The correction term is proportional to $b b'$, so it vanishes whenever the diffusion coefficient is constant.
+For GBM on the price, $a(S) = \mu S$, $b(S) = \sigma S$ and $b'(S) = \sigma$, so $b b' = \sigma^2 S$ and
+\begin{equation}
+    S_{n+1} = S_n + \mu S_n h + \sigma S_n \Delta W_n + \tfrac12 \sigma^2 S_n \left( \Delta W_n^2 - h \right),
+    \label{eq:milstein-gbm}
+\end{equation}
+which is \texttt{dS\_correction} in \texttt{SDEs/gbm.py}. For GBM on the log-price, $b \equiv \sigma$ is constant, so the correction vanishes identically: Milstein and Euler--Maruyama coincide on $X$. This is the precise sense in which a strong order cannot be measured on the log-price scale, and it is why \eqref{eq:milstein-gbm} rather than \eqref{eq:em-gbm-log} is used in the order study of Section~\ref{sec:experiments}.
+For the two-dimensional non-affine system, the same construction produces cross terms and iterated stochastic integrals,
+\begin{equation}
+    z_{n+1} = z_n + a(z_n) h + B(z_n) \Delta \bm{W}_n + \sum_{j_1, j_2} L^{j_1} L^{j_2} b(z_n)\, I_{(j_1, j_2), n},
+    \label{eq:milstein-multi}
+\end{equation}
+where $B$ collects the diffusion vector fields $b_1, b_2$ and $I_{(j_1,j_2)}$ are iterated It\^o integrals. The terms with $j_1 \ne j_2$ cannot be expressed through $\Delta W^{(1)} \Delta W^{(2)}$ unless the vector fields commute. For the non-affine model,
+\begin{equation}
+    b_1(X, Y) = \begin{pmatrix} g(Y) \\ 0 \end{pmatrix},
+    \qquad
+    b_2(X, Y) = \begin{pmatrix} 0 \\ \xi \sqrt{1 + Y^2} \end{pmatrix},
+    \label{eq:vector-fields}
+\end{equation}
+and a direct computation gives
+\begin{equation}
+    [b_1, b_2] = \begin{pmatrix} -\xi \sqrt{1 + Y^2}\, g'(Y) \\ 0 \end{pmatrix} \ne 0,
+    \label{eq:lie-bracket}
+\end{equation}
+because $g'(y) = (\sigma_{\max} - \sigma_{\min}) e^{-y} (1 + e^{-y})^{-2} > 0$ everywhere. The noise is therefore non-commutative, the cross terms do not collapse, and a full Milstein method would require simulated L\'evy areas. The scalar order-one result is not available for this system, so EM alone is used for the non-affine model throughout.
+
+\subsection{Convergence}
+\label{sec:convergence}
+
+\paragraph{Why the deterministic route is not available}
+For an ordinary differential equation one obtains convergence by combining consistency with a stability estimate, and the Lax equivalence theorem closes the argument. There is no SDE counterpart of that theorem, and the corresponding placeholder in the report template must not be filled in. The reason is structural: the local defect of a stochastic scheme is random, and how it accumulates depends on its correlation structure. The two orders that replace it are defined separately and are not interchangeable; they are proved by the It\^o--Taylor expansion together with moment bounds, following Kloeden and Platen~\cite{kloeden} and Higham~\cite{higham}.
+
+\begin{definition}[Strong order]
+\label{def:strong}
+A scheme has strong order $\gamma$ if the scheme and the exact solution, driven by the \emph{same} Brownian path, satisfy
+\begin{equation}
+    \mathbb{E}\!\left[ \left| X_N - X(T) \right| \right] \le C\, h^{\gamma}
+    \label{eq:strong-order}
+\end{equation}
+for all sufficiently small step sizes $h$. The error is a pathwise distance in the $L^1(\Omega)$ norm, so the two solutions must be coupled through common random numbers.
+\end{definition}
+
+\begin{definition}[Weak order]
+\label{def:weak}
+A scheme has weak order $\beta$ if
+\begin{equation}
+    \left| \mathbb{E}\!\left[ f(X_N) \right] - \mathbb{E}\!\left[ f(X(T)) \right] \right| \le C\, h^{\beta}
+    \label{eq:weak-order}
+\end{equation}
+for every $f$ in a suitable class of smooth test functions with at most polynomial growth. Only the two distributions are compared, so no coupling is required and the two sides may be estimated from independent batches.
+\end{definition}
+
+\begin{theorem}[Convergence of Euler--Maruyama and Milstein]
+\label{thm:convergence}
+Let Assumption~\ref{ass:regularity} hold. Then Euler--Maruyama \eqref{eq:em-general} has strong order $1/2$ and weak order $1$. If in addition the diffusion coefficient satisfies $b \in C^1$ with Lipschitz derivative, then Milstein \eqref{eq:milstein-general} has strong order $1$ and weak order $1$.
+\end{theorem}
+
+The two orders are illustrated by the It\^o--Taylor expansion of Section~\ref{sec:truncation}. Euler--Maruyama retains the increment $b\,\Delta W_n$, whose size is of order $h^{1/2}$ and which therefore dominates a single step, but it discards the term $\tfrac12 b b'(\Delta W_n^2 - h)$ of order $h$. That discarded term has zero conditional expectation and is uncorrelated across steps, so it accumulates like the increments of a random walk, that is as $\sqrt{N} = h^{-1/2}$, and the resulting error is of order $h^{1/2}$. Milstein retains the term, its local defect drops to order $h^{3/2}$, and the accumulated error becomes of order $h$. Deterministic (drift-type) defects behave differently: they are not mean-zero and accumulate linearly over $N = T/h$ steps, which is why the weak error is one order higher than the strong error.
+
+Three consequences are used in Section~\ref{sec:experiments}. First, the strong error of Euler--Maruyama on the price process \eqref{eq:em-gbm} is expected to fall with slope $1/2$ on a log--log plot, and that of Milstein with slope $1$. Second, the weak error of both schemes is expected to fall with slope $1$. Third, because the Milstein correction has zero mean, it does not change the bias, so $\mathbb{E}[S_N]$ is \emph{identical} for Euler--Maruyama and Milstein at every step size. This is a sharp and inexpensive consistency check, and it is listed among the verification steps in Section~\ref{sec:impl-verify}.
+
+\begin{remark}[The benchmark is not a test of the theorem]
+\label{rem:exact-on-log}
+On the log-price scale, Euler--Maruyama reproduces the exact solution at every grid point, so its error is identically zero rather than of order $h^{1/2}$. Theorem~\ref{thm:convergence} remains valid but is not sharp there, for the degenerate reason explained in Section~\ref{sec:schemes}. This is why the order study is carried out on the price process \eqref{eq:em-gbm}, where the noise is state dependent and the theorem carries information.
+\end{remark}
+
+\begin{remark}[What can and cannot be measured for the non-affine model]
+\label{rem:empirical}
+For the non-affine system \eqref{eq:em-nasv} no exact solution exists, so the strong error can only be measured against a finely resolved numerical solution. Two consequences must be stated rather than glossed over. First, the resulting rate is an \emph{empirical} rate, not a theorem, and it must be reported as such. Second, because the noise is non-commutative by \eqref{eq:lie-bracket}, no scalar Milstein comparison is available for this system, and Euler--Maruyama is expected to show a strong order close to $1/2$. The reference must itself be validated by computing it at two successive refinements; agreement between two discretisations is evidence, not an exact error calculation.
+\end{remark}
+
+\begin{remark}[Smoothness of the test function matters for the weak order]
+\label{rem:weak-smoothness}
+Definition~\ref{def:weak} assumes $f$ is smooth. The payoff $f(s) = (s - K)^+$ used in Section~\ref{sec:weak} is Lipschitz but not differentiable at $s = K$, so the weak order measured through that functional is not guaranteed to equal $1$ and may be measurably lower. For this reason the primary weak-order evidence in this report is the exact first-moment identity $\mathbb{E}[S_T] = S_0 e^{\mu T}$, which is available in closed form and requires no Monte Carlo at all, and the payoff study is treated as secondary evidence.
+\end{remark}
+
+
+\subsection{Convergence}
+\label{sec:convergence}
+
+\paragraph{Why the deterministic route is not available}
+For an ordinary differential equation one obtains convergence by combining consistency with a stability estimate, and the Lax equivalence theorem closes the argument. There is no SDE counterpart of that theorem, and the corresponding placeholder in the report template must not be filled in. The reason is structural: the local defect of a stochastic scheme is random, and how it accumulates depends on its correlation structure. The two orders that replace it are defined separately and are not interchangeable; they are proved by the It\^o--Taylor expansion together with moment bounds, following Kloeden and Platen~\cite{kloeden} and Higham~\cite{higham}.
+
+\begin{definition}[Strong order]
+\label{def:strong}
+A scheme has strong order $\gamma$ if the scheme and the exact solution, driven by the \emph{same} Brownian path, satisfy
+\begin{equation}
+    \mathbb{E}\!\left[ \left| X_N - X(T) \right| \right] \le C\, h^{\gamma}
+    \label{eq:strong-order}
+\end{equation}
+for all sufficiently small step sizes $h$. The error is a pathwise distance in the $L^1(\Omega)$ norm, so the two solutions must be coupled through common random numbers.
+\end{definition}
+
+\begin{definition}[Weak order]
+\label{def:weak}
+A scheme has weak order $\beta$ if
+\begin{equation}
+    \left| \mathbb{E}\!\left[ f(X_N) \right] - \mathbb{E}\!\left[ f(X(T)) \right] \right| \le C\, h^{\beta}
+    \label{eq:weak-order}
+\end{equation}
+for every $f$ in a suitable class of smooth test functions with at most polynomial growth. Only the two distributions are compared, so no coupling is required and the two sides may be estimated from independent batches.
+\end{definition}
+
+\begin{theorem}[Convergence of Euler--Maruyama and Milstein]
+\label{thm:convergence}
+Let Assumption~\ref{ass:regularity} hold. Then Euler--Maruyama \eqref{eq:em-general} has strong order $1/2$ and weak order $1$. If in addition the diffusion coefficient satisfies $b \in C^1$ with Lipschitz derivative, then Milstein \eqref{eq:milstein-general} has strong order $1$ and weak order $1$.
+\end{theorem}
+
+The two orders are illustrated by the It\^o--Taylor expansion of Section~\ref{sec:truncation}. Euler--Maruyama retains the increment $b\,\Delta W_n$, whose size is of order $h^{1/2}$ and which therefore dominates a single step, but it discards the term $\tfrac12 b b'(\Delta W_n^2 - h)$ of order $h$. That discarded term has zero conditional expectation and is uncorrelated across steps, so it accumulates like the increments of a random walk, that is as $\sqrt{N} = h^{-1/2}$, and the resulting error is of order $h^{1/2}$. Milstein retains the term, its local defect drops to order $h^{3/2}$, and the accumulated error becomes of order $h$. Deterministic (drift-type) defects behave differently: they are not mean-zero and accumulate linearly over $N = T/h$ steps, which is why the weak error is one order higher than the strong error.
+
+Three consequences are used in Section~\ref{sec:experiments}. First, the strong error of Euler--Maruyama on the price process \eqref{eq:em-gbm} is expected to fall with slope $1/2$ on a log--log plot, and that of Milstein with slope $1$. Second, the weak error of both schemes is expected to fall with slope $1$. Third, because the Milstein correction has zero mean, it does not change the bias, so $\mathbb{E}[S_N]$ is \emph{identical} for Euler--Maruyama and Milstein at every step size. This is a sharp and inexpensive consistency check, and it is listed among the verification steps in Section~\ref{sec:impl-verify}.
+
+\begin{remark}[The benchmark is not a test of the theorem]
+\label{rem:exact-on-log}
+On the log-price scale, Euler--Maruyama reproduces the exact solution at every grid point, so its error is identically zero rather than of order $h^{1/2}$. Theorem~\ref{thm:convergence} remains valid but is not sharp there, for the degenerate reason explained in Section~\ref{sec:schemes}. This is why the order study is carried out on the price process \eqref{eq:em-gbm}, where the noise is state dependent and the theorem carries information.
+\end{remark}
+
+\begin{remark}[What can and cannot be measured for the non-affine model]
+\label{rem:empirical}
+For the non-affine system \eqref{eq:em-nasv} no exact solution exists, so the strong error can only be measured against a finely resolved numerical solution. Two consequences must be stated rather than glossed over. First, the resulting rate is an \emph{empirical} rate, not a theorem, and it must be reported as such. Second, because the noise is non-commutative by \eqref{eq:lie-bracket}, no scalar Milstein comparison is available for this system, and Euler--Maruyama is expected to show a strong order close to $1/2$. The reference must itself be validated by computing it at two successive refinements; agreement between two discretisations is evidence, not an exact error calculation.
+\end{remark}
+
+\begin{remark}[Smoothness of the test function matters for the weak order]
+\label{rem:weak-smoothness}
+Definition~\ref{def:weak} assumes $f$ is smooth. The payoff $f(s) = (s - K)^+$ used in Section~\ref{sec:weak} is Lipschitz but not differentiable at $s = K$, so the weak order measured through that functional is not guaranteed to equal $1$ and may be measurably lower. For this reason the primary weak-order evidence in this report is the exact first-moment identity $\mathbb{E}[S_T] = S_0 e^{\mu T}$, which is available in closed form and requires no Monte Carlo at all, and the payoff study is treated as secondary evidence.
+\end{remark}
+
+\newpage
+% ============================================================
+\section{Implementation}
+\label{sec:implementation}
+% ============================================================
+
+\subsection{Algorithms}
+\label{sec:algorithms}
+
+This section lists the algorithms that produce every number in
+Section~\ref{sec:experiments}. Both schemes are used for GBM, and only
+Euler--Maruyama for the non-affine model.
+
+\begin{algorithm}[H]
+\caption{Euler--Maruyama (EM) for GBM, $dS = \mu S\,dt + \sigma S\,dW$}
+\label{alg:em}
+\begin{algorithmic}[1]
+\Require initial price $S_0$, step size $h$, steps $N$,
+         increments $\{\Delta W_n\}_{n=0}^{N-1}$, drift $\mu$, volatility $\sigma$
+\Ensure approximate price $S_N$
+\State $S \leftarrow S_0$
+\For{$n = 0, 1, \ldots, N-1$}
+    \State $S \leftarrow S + \mu\, S\, h + \sigma\, S\, \Delta W_n$
+\EndFor
+\State \Return $S$
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[H]
+\caption{Milstein for GBM, $dS = \mu S\,dt + \sigma S\,dW$}
+\label{alg:milstein}
+\begin{algorithmic}[1]
+\Require initial price $S_0$, step size $h$, steps $N$,
+         increments $\{\Delta W_n\}_{n=0}^{N-1}$, drift $\mu$, volatility $\sigma$
+\Ensure approximate price $S_N$
+\State $S \leftarrow S_0$
+\For{$n = 0, 1, \ldots, N-1$}
+    \State $S \leftarrow S + \mu\, S\, h + \sigma\, S\, \Delta W_n
+                    + \tfrac12\, \sigma^2 S \left( \Delta W_n^2 - h \right)$
+\EndFor
+\State \Return $S$
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[H]
+\caption{Euler--Maruyama for the non-affine model, state $z_n = (X_n, Y_n)$}
+\label{alg:em-nasv}
+\begin{algorithmic}[1]
+\Require input $(X_0, Y_0)$, step size $h$, steps $N$,
+         correlated increments $\{\Delta W_n^{(1)}, \Delta W_n^{(2)}\}$,
+         parameters $\mu, \kappa, \theta, \xi, \sigma_{\min}, \sigma_{\max}$
+\Ensure $X_N$; the price is $S_N = e^{X_N}$
+\State $X \leftarrow X_0$, \; $Y \leftarrow Y_0$
+\For{$n = 0, 1, \ldots, N-1$}
+    \State $\sigma_n \leftarrow g(Y)$
+           \Comment{logistic volatility, \eqref{eq:nasv-g}}
+    \State $X \leftarrow X + \left( \mu - \tfrac12 \sigma_n^2 \right) h
+              + \sigma_n\, \Delta W_n^{(1)}$
+    \State $Y \leftarrow Y + \kappa (\theta - Y)\, h
+              + \xi \sqrt{1 + Y^2}\; \Delta W_n^{(2)}$
+\EndFor
+\State \Return $X$
+\end{algorithmic}
+\end{algorithm}
+
+No Milstein counterpart to Algorithm~\ref{alg:em-nasv} is implemented. As shown
+in \eqref{eq:lie-bracket}, the two diffusion vector fields of the non-affine
+system do not commute, so a multidimensional Milstein method would require
+cross terms and simulated L\'evy areas. The solver therefore raises
+\texttt{NotImplementedError} if it is asked for a Milstein step on this model.
+
+\subsection{Code Structure}
+\label{sec:code-structure}
+
+The package is split by responsibility. Models and the Brownian engine live in
+\texttt{SDEs/}, the time-stepping schemes in \texttt{solvers/}, and shared
+helpers in \texttt{tools/} and \texttt{visualizations/}; each experiment is a
+single script or notebook in \texttt{experiments/}.
+
+\newpage
+\begin{verbatim}
+NumericalPDE/
+|-- README.md            # how to run + repo layout
+|-- .gitignore
+|-- code/                # all source (a package; each dir has __init__.py)
+|   |-- run_all.py       # entry point (stub, not wired to experiments yet)
+|   |-- SDEs/            # model definitions + Brownian-motion engine
+|   |   |-- bm_engine.py     # standard_bm, correlated_bm_pair, extract_dw
+|   |   |-- gbm.py           # GBM: dS_rhs, dS_correction, dX_rhs, S_exact
+|   |   |-- nasv.py          # NA-SV: g, dXdY_rhs
+|   |-- solvers/         # time-stepping schemes
+|   |   |-- em.py            # em_step, em_solve (gbm, nasv)
+|   |   |-- milstein.py      # milstein_step, milstein_solve (gbm only)
+|   |-- tools/
+|   |   |-- mc.py            # simulate / load fine increment logs (data/)
+|   |-- visualizations/
+|   |   |-- paths.py         # plot_paths, plot_paths_band, plot_paths_band_slices
+|   |   |-- distributions.py # plot_distribution
+|   |-- experiments/     # one script or notebook per experiment
+|       |-- exp0_simulate_bm.py            # same-BM smoke test + band/slices
+|       |-- exp1_gbm_convergence.py        # GBM strong convergence
+|       |-- exp2_positivity_analysis.ipynb # GBM positivity analysis
+|       |-- exp3_nasv_convergence.py       # NA-SV strong + weak convergence
+|-- data/                # increment logs: gbm_dw_log.npy, nasv_dw_log.npy
+|-- figures/             # generated figures (band_*, slices_*, exp2_*)
+|-- notes/               # meeting notes, problem-pack extracts
+|-- report/              # this report
+\end{verbatim}
+
+\subsection{Key Design Decisions}
+\label{sec:key-decisions}
+
+\subsubsection{Brownian Engine and Shared Paths}
+\label{sec:engine}
+
+Strong error is a pathwise distance (Definition~\ref{def:strong}), so the two
+solutions being compared must be driven by the same Brownian path. If a fresh
+path were drawn for each step size, the differences between levels would be
+dominated by sampling noise rather than by discretisation error, and no order
+could be estimated. The engine therefore draws fine increments once at the
+finest resolution $n_{\max}$ and obtains every coarser level $n$ (with
+$n \mid n_{\max}$) by summing blocks of fine increments:
+\begin{equation}
+    \left( \Delta W^{(c)} \right)_j
+    = \sum_{i = j b + 1}^{(j+1) b} \Delta W_i,
+    \qquad b = n_{\max} / n, \qquad j = 0, \ldots, n-1 .
+    \label{eq:coarsening}
+\end{equation}
+Because each coarse increment is a block sum, the coarse path is exactly the
+fine path sampled on the coarse grid:
+\begin{equation}
+    \sum_{j} \left( \Delta W^{(c)} \right)_j = \sum_{i} \Delta W_i = W(T)
+    \qquad \text{for every } n .
+    \label{eq:same-endpoint}
+\end{equation}
+Equation~\eqref{eq:same-endpoint} is what makes the strong error comparable
+across levels: the reference value $S(T)$ against which each scheme is measured
+is the same random variable at every resolution.
+
+Two further properties of \eqref{eq:coarsening} matter. First, the correlation
+is preserved exactly --- the coarse pair is still jointly Gaussian with
+$\operatorname{Cov}\!\left( \Delta W^{(1)}, \Delta W^{(2)} \right) = \rho\, h$
+--- so the parameter $\rho$ is constant across the study even though the
+increments are never regenerated. Second, the nesting is transitive, so levels
+are produced by successive halving of the finest log; only the current level is
+kept in memory, which bounds it by roughly twice the finest level rather than by
+the sum over all levels.
+
+The increment logs are written once to \texttt{data/} by \texttt{mc.simulate}
+and reloaded by each experiment through \texttt{mc.load}, so the shared-path
+coupling holds \emph{between} experiments as well as within one.
+
+\subsubsection{Reproducibility}
+\label{sec:reproducibility}
+
+Each experiment fixes its own generator seed, and the increment logs in
+\texttt{data/} are stored together with the seeds and parameters that produced
+them, so that every figure and table can be regenerated from
+\texttt{run\_all.py} alone. Table~\ref{tab:experiment-design} records the design
+of each experiment: the model, the methods compared, the step sizes, the number
+of paths and the cost metrics that are reported.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lllll}
+\toprule
+\textbf{Script} & \textbf{Model} & \textbf{Methods} & \textbf{Step sizes}
+    & \textbf{Paths} \\
+\midrule
+\texttt{exp1} & GBM        & EM, Milstein, exact
+              & - & - \\
+\texttt{exp2} & GBM        & EM, Milstein, exact
+              & - & - \\
+\texttt{exp3a} & NASV        & exact, EM
+              & - & - \\
+\texttt{exp3b} & NASV        & exact, EM
+              & - & - \\
+\texttt{exp4} & GBM, NASV        & EM, Milstein
+              & - & - \\
+\bottomrule
+\end{tabular}
+\caption{Design of the numerical experiments. The non-affine experiments use
+fine references at $h_{\mathrm{ref}} = T/2^{13}$ and $T/2^{14}$; each experiment
+records the number of paths, the number of time steps, the wall time and the
+number of random numbers consumed.}
+\label{tab:experiment-design}
+\end{table}
+
+\newpage
+% ============================================================
+\section{Numerical Experiments} \label{sec:experiments}
+% ============================================================
+
+\subsection{Verification: Method of Manufactured Solutions or Exact Solutions}
+[Present a test case with a known solution. Show the error table and the
+convergence plot.]
+
+\subsubsection{GBM with Exact Solution}
+
+\subsubsection{Non-Affine Stochastic Volatility Model with Manufactured Solution}
+manufactured by a much finer EM reference path
+
+\begin{table}[H]
+\centering
+\begin{tabular}{cccc}
+\toprule
+\textbf{Step size $h$} & \textbf{Error} & \textbf{Ratio} & \textbf{Order} \\
+\midrule
+$0.1$    & [value] & ---  & ---  \\
+$0.05$   & [value] & [ratio] & [order] \\
+$0.025$  & [value] & [ratio] & [order] \\
+\bottomrule
+\end{tabular}
+\caption{Convergence study for [test case].}
+\end{table}
+
+\subsection{Weak Convergence and Monte Carlo Uncertainty}
+\label{sec:weak}
+
+\paragraph{What is measured}
+The weak functional is the undiscounted payoff $\mathbb{E}[(S_T - K)^+]$ with $K = 100$, and the first moment $\mathbb{E}[S_T]$ is reported alongside it. The second quantity is the sharper test, because Remark~\ref{rem:nasv-mean} gives it in closed form: $\mathbb{E}[S_T] = S_0 e^{\mu T} = 105.1271$ exactly, for every parameter value. A sample mean that misses this value by more than two standard errors indicates an implementation error, most likely a missing $-\tfrac12 g(Y_t)^2$ term.
+
+\paragraph{One fixed reference, not one per level}
+The reference is a single numerical solution computed once at $h_{\mathrm{ref}} = T/2^{11}$ and reused at every level. Recomputing the reference at each level, for instance by keeping a fixed refinement ratio such as $h_{\mathrm{ref}} = h/32$, is not acceptable here: the reference would then change with the level, the differences would no longer be errors against a common object, and the fitted slope would be uninterpretable. The reference is validated by repeating the whole study at $h_{\mathrm{ref}} = T/2^{12}$; if the two fitted slopes disagree beyond their standard errors, the reference is not yet resolved and must be refined further.
+
+\paragraph{Paired estimator}
+Because the coarse and reference paths are driven by the same Brownian increments, the bias is estimated from the per-path difference
+\begin{equation}
+    \hat{b}_h = \frac{1}{M} \sum_{m=1}^{M} \left( p_h^{(m)} - p_{\mathrm{ref}}^{(m)} \right),
+    \qquad
+    \widehat{\mathrm{se}}_h = \frac{\operatorname{sd}\!\left( p_h - p_{\mathrm{ref}} \right)}{\sqrt{M}},
+    \label{eq:paired-bias}
+\end{equation}
+where $p_h^{(m)} = (S_T^{(h,m)} - K)^+$. Taking the difference path by path, rather than subtracting two independently estimated means, is what makes the measurement feasible: the payoff itself has a standard deviation of order ten price units, while the paired difference has a standard deviation of the same order as the discretisation error being measured, which is one to two orders of magnitude smaller. The confidence interval is $\hat{b}_h \pm 1.96\, \widehat{\mathrm{se}}_h$.
+
+\paragraph{When a slope may be quoted}
+A slope is fitted only over the levels where the estimated bias exceeds twice its standard error, that is where $\left| \hat{b}_h \right| > 2\, \widehat{\mathrm{se}}_h$. Levels that fail this test are reported as unresolved rather than plotted as data. This rule is enforced in the code and not applied by eye afterwards. The fitted slope is reported with its standard error and with the range of $h$ over which the fit was made.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lccccc}
+\toprule
+\textbf{Step size $h$} & \textbf{$\mathbb{E}[p_h]$} & \textbf{Bias $\hat{b}_h$}
+    & \textbf{Paired SE} & \textbf{$\left| \hat{b}_h \right| / (2\,\mathrm{se})$}
+    & \textbf{In fit} \\
+\midrule
+$T/2^{2}$  & [value] & [value] & [value] & [value] & [yes/no] \\
+$T/2^{3}$  & [value] & [value] & [value] & [value] & [yes/no] \\
+$T/2^{4}$  & [value] & [value] & [value] & [value] & [yes/no] \\
+$T/2^{5}$  & [value] & [value] & [value] & [value] & [yes/no] \\
+$T/2^{6}$  & [value] & [value] & [value] & [value] & [yes/no] \\
+\bottomrule
+\end{tabular}
+\caption{Weak convergence of the payoff, estimated from paired differences
+against a single reference at $h_{\mathrm{ref}} = T/2^{11}$. The fitted slope is
+[value] $\pm$ [value]. The levels marked \emph{no} are not resolved at this
+sample size and are excluded from the fit.}
+\label{tab:weak}
+\end{table}
+
+\paragraph{The exact first moment, and why Monte Carlo is not the right tool for it}
+For GBM the weak error of the first moment can be written down exactly. Iterating $\mathbb{E}[S_{n+1}] = \mathbb{E}[S_n](1 + \mu h)$ gives
+\begin{equation}
+    \mathbb{E}[S_N] = S_0 (1 + \mu h)^{T/h}
+    = S_0 e^{\mu T} \left[ 1 - \frac{\mu^2 T}{2} h + \mathcal{O}(h^2) \right],
+    \label{eq:gbm-weak-bias}
+\end{equation}
+so the relative bias is $-\tfrac12 \mu^2 T h$, which is of order $h$ and confirms the weak order of $1$ directly. With the parameters of Table~\ref{tab:gbm-params}, the absolute bias at $h = 1/16$ is about $8 \times 10^{-3}$ price units. Resolving a bias that small from a sample with standard deviation $21.24$ would require of the order of $7 \times 10^{6}$ paths, so the closed form \eqref{eq:gbm-weak-bias}, not a simulation, is the primary evidence for the weak order of the first moment. The Monte Carlo study is reserved for the payoff, where the bias is large enough to be seen.
+
+Two checks from Section~\ref{sec:impl-verify} apply here. The first is $\mathbb{E}[S_N] = 105.1271$ against the sample mean with its standard error, for both models. The second is the predicted equality of the Euler--Maruyama and Milstein weak curves for GBM, which follows from the zero mean of the Milstein correction; any visible gap between the two curves indicates an implementation error rather than a discretisation effect.
+
+\subsection{Main Results and Comparison of Methods}
+[Present the experiments that answer the project's central question. Use
+high-quality figures with interpretive captions.]
+
+\subsubsection{GBM Results}
+\paragraph{Convergence}
+\paragraph{Positive Preserving}
+
+\subsubsection{Non-Affine Stochastic-Volatility Results}
+\paragraph{Convergence}
+
+\subsubsection{Cost vs. Accuracy}
+\begin{figure}[H]
+\centering
+\fbox{\parbox{0.8\textwidth}{\centering \vspace{3em} [Insert your figure here] \vspace{3em}}}
+\caption{[Caption that interprets, not merely describes. E.g., ``The log-log plot
+confirms second-order convergence (slope 1.98) on the smooth test case, and shows
+the round-off floor at $h \approx 10^{-6}$.'']}
+\label{fig:convergence}
+\end{figure}
+
+\subsection{Limitations and Robustness}
+[Discuss parameter regimes where your method struggles. This is not a weakness ---
+it is scientific honesty.]
+
+\newpage
+% ============================================================
+\section{Conclusions}
+% ============================================================
+
+[Summarise in 3--4 bullet points:]
+\begin{itemize}[leftmargin=2em]
+\item [What you achieved.]
+\item [The most surprising or instructive finding.]
+\item [The main limitation you identified.]
+\item [A concrete direction for future work.]
+\end{itemize}
+
+\newpage
+% ============================================================
+\section*{References}
+% ============================================================
+
+[Use BibTeX or list references manually. Include at least: (1) the textbook from
+which you learned the method; (2) a paper applying the method to a problem
+similar to yours; (3) a software reference (NumPy, SciPy, scikit-fem).]
+
+\begin{thebibliography}{9}
+\bibitem{ref1} Author, A. \emph{Title}. Journal, year.
+\bibitem{ref2} Author, B. \emph{Book title}. Publisher, year.
+\end{thebibliography}
+
+\newpage
+% ============================================================
+\appendix
+\section{AI Transparency Log}
+% ============================================================
+
+[Append the completed team AI Transparency Log here. See
+\texttt{06\_Templates/ICS} for the full form: tools used, significant claim audits,
+what you changed and why, and the intellectual ownership declarations.]
+
+\section{Individual Contribution Statements}
+% ============================================================
+
+Each team member must complete the following (repeat for all 5 members):
+
+\begin{formbox}
+\textbf{Name:} \underline{\hspace{5cm}}
+
+\vspace{0.5em}
+\textbf{1. My specific contributions to this project:}
+
+[3--5 sentences: which equations you derived, which code modules you wrote,
+which figures you produced, which report sections you drafted.]
+
+\vspace{0.5em}
+\textbf{2. The hardest conceptual obstacle I encountered:}
+
+[One specific mathematical or algorithmic difficulty and how you overcame it.]
+
+\vspace{0.5em}
+\textbf{3. One piece of AI-generated output my team used, and what I changed:}
+
+[Cross-reference an item from the AI Transparency Log.]
+
+\vspace{0.5em}
+\textbf{4. One thing I still do not fully understand:}
+
+[Not penalised; helps the instructor plan the next project.]
+
+\vspace{0.5em}
+\textbf{Signature:} \underline{\hspace{4cm}} \quad \textbf{Date:} \underline{\hspace{2cm}}
+\end{formbox}
+
+\section{Supplementary Figures and Data}
+% ============================================================
+
+[Place any additional figures, tables, or code listings that would interrupt the
+main narrative but may be useful to a curious reader.]
+
+\end{document}
