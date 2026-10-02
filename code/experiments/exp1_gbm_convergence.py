@@ -12,7 +12,7 @@ from code.SDEs.BM_engine import standard_bm, extract_dw
 S0, mu, sigma = 1.0, 0.3, 0.4
 T = 1.0
 n_max = 2**12
-n_paths = 1000
+n_paths = 100000
 seed = 42
 K = 1.0
 
