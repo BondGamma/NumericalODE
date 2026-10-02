@@ -27,11 +27,10 @@ LOG_S0 = np.log(S0)
 FIG_DIR = "figures"
 
 
-# ============================================================
+
 # 1. MILSTEIN COARSE INTEGRATOR
-# ============================================================
 def _milstein_coarse_from_fine(dW1_fine, dW2_fine, n_coarse):
-    """This is basically to get the coarse (rough) incriments from Brownian "engine", and then putting them in the blocks."""
+    """This is basically to get the coarse (rough) incriments from Brownian "engine" and then putting them in the blocks."""
     n_paths, n_fine = dW1_fine.shape
     if n_fine % n_coarse != 0:
         raise ValueError(f"n_fine={n_fine} must be a multiple of n={n_coarse}")
@@ -44,8 +43,7 @@ def _milstein_coarse_from_fine(dW1_fine, dW2_fine, n_coarse):
     dW1_sum = dW1_r.sum(axis=2)
     dW2_sum = dW2_r.sum(axis=2)
 
-    # 1-D Milstein correction on Y: sum over fine sub-steps of
-    #   (dW2)^2 - dt_fine  = (dW2_coarse)^2 - dt_coarse + cross-terms
+
     sum_dW2_sq_minus_dt = (dW2_r * dW2_r).sum(axis=2) - dt_c
 
     X = np.full(n_paths, LOG_S0)
@@ -62,9 +60,7 @@ def _milstein_coarse_from_fine(dW1_fine, dW2_fine, n_coarse):
     return X, Y
 
 
-# ============================================================
 # 2. COST-ACCURACY EXPERIMENT
-# ============================================================
 def cost_accuracy_experiment(
     n_steps_list=(4, 8, 16, 32, 64),
     n_paths=50_000,
@@ -73,7 +69,6 @@ def cost_accuracy_experiment(
     K=100.0,
     seed=123,
 ):
-    """For each scheme and resolution, measure bias (so like a distance from the payoff), MC error (the simulated noise), and cost."""
     if n_paths % batch_size != 0:
         raise ValueError("n_paths must be a multiple of batch_size")
     for n in n_steps_list:
@@ -82,13 +77,11 @@ def cost_accuracy_experiment(
 
     n_batches = n_paths // batch_size
 
-    # Collecting stuff for EM and Milstein (paired differences vs reference)
     em_sum  = {n: 0.0 for n in n_steps_list}
     em_sq   = {n: 0.0 for n in n_steps_list}
     mil_sum = {n: 0.0 for n in n_steps_list}
     mil_sq  = {n: 0.0 for n in n_steps_list}
 
-    # Accumulated wall time per scheme per resolution
     em_times  = {n: 0.0 for n in n_steps_list}
     mil_times = {n: 0.0 for n in n_steps_list}
 
@@ -106,13 +99,13 @@ def cost_accuracy_experiment(
         seed_b = seed + b
         dW1, dW2, _ = _fine_increments(n_fine_ref, batch_size, seed_b)
 
-        # EUROPEAN CALL payoff on the fine grid (EM, consistent with exp3)
+        # EUROPEAN CALL payoff on the fine grid
         X_ref, _ = _em_path_from_increments(dW1, dW2, T / n_fine_ref)
         S_ref    = np.exp(X_ref)
         payoff_ref = np.maximum(S_ref - K, 0.0)
 
         for n in n_steps_list:
-            # --- EM ---
+            #EM
             t0 = time.perf_counter()
             Xe, _ = _em_coarse_from_fine(dW1, dW2, n)
             em_times[n] += time.perf_counter() - t0
@@ -136,7 +129,6 @@ def cost_accuracy_experiment(
             print(f"  batch {b+1:3d}/{n_batches}  "
                   f"({time.perf_counter() - t_start_all:5.1f} s)")
 
-    # --- Compute metrics ---
     results = []
     for n in n_steps_list:
         h = T / n
@@ -169,9 +161,8 @@ def cost_accuracy_experiment(
     return results
 
 
-# ============================================================
-# 3. PLOTTING
-# ============================================================
+
+# PLOTTING
 def plot_cost_accuracy(results, target_rmse=1e-3):
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
@@ -212,9 +203,6 @@ def plot_cost_accuracy(results, target_rmse=1e-3):
     print(f"Saved {out}\n")
 
 
-# ============================================================
-# 4. TABLE
-# ============================================================
 def print_cost_accuracy_table(results):
     lines = []
     lines.append("=" * 100)
@@ -254,9 +242,6 @@ def print_cost_accuracy_table(results):
     print(f"Saved {out_path}\n")
 
 
-# ============================================================
-# 5. CONCLUSION
-# ============================================================
 def state_conclusion(results):
     n_target = 32
     em  = next((r for r in results

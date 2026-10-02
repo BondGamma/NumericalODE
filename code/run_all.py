@@ -1,8 +1,4 @@
-"""
-run_all.py — Master runner for NumericalPDE experiments to make Prof. Hui life easier :)
-
-"""
-
+#run_all.py — Master runner for NumericalPDE experiments to make Prof. Hui life easier :)
 import argparse
 import os
 import subprocess
@@ -11,10 +7,11 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-# 
+
 PROJECT_ROOT    = Path(__file__).resolve().parent.parent
 EXPERIMENTS_DIR = PROJECT_ROOT / "code" / "experiments"
 LOGS_DIR        = PROJECT_ROOT / "logs" / "run_all"
+REQUIREMENTS    = PROJECT_ROOT / "requirements.txt"
 
 DEFAULT_ORDER = [
     "exp0_simulate_bm.py",
@@ -23,9 +20,7 @@ DEFAULT_ORDER = [
     "exp4_cost_accuracy.py",
 ]
 
-
 TIMEOUT = 3600
-
 
 TIMEOUTS = {
     "exp3_nasv_convergence.py": 6 * 3600,
@@ -33,9 +28,36 @@ TIMEOUTS = {
 }
 
 
+def install_requirements():
+    if not REQUIREMENTS.is_file():
+        print(f"No requirements.txt found at {REQUIREMENTS}, skipping install.")
+        return True
+
+    print(f"{'=' * 70}")
+    print(f"▶  Installing requirements from {REQUIREMENTS.name}")
+    print(f"{'=' * 70}")
+
+    cmd = [sys.executable, "-m", "pip", "install", "-r", str(REQUIREMENTS)]
+
+    env = os.environ.copy()
+    env["PYTHONUNBUFFERED"] = "1"
+
+    try:
+        proc = subprocess.run(cmd, cwd=str(PROJECT_ROOT), env=env)
+    except Exception as e:
+        print(f"   → ERROR while installing requirements: {e}")
+        return False
+
+    if proc.returncode != 0:
+        print(f"   → FAIL  (pip returned {proc.returncode})")
+        return False
+
+    print("   → OK  (requirements installed)\n")
+    return True
+
+
 # whatever it optimized the search of the directory ..
 def discover():
-    """Return .py files in code/experiments/ in run order."""
     if not EXPERIMENTS_DIR.is_dir():
         raise SystemExit(f"Experiments dir not found: {EXPERIMENTS_DIR}")
 
@@ -57,9 +79,7 @@ def discover():
     return files
 
 
-# --------------------------------------------------------------------------
 def run_one(path: Path) -> dict:
-    """ONE EXPERIMENT -> ONE DICTIONARY"""
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
     log_path = LOGS_DIR / f"{path.stem}.log"
     timeout = TIMEOUTS.get(path.name, TIMEOUT)
@@ -109,7 +129,6 @@ def run_one(path: Path) -> dict:
     return {"name": path.name, "status": status, "rc": rc, "elapsed": elapsed}
 
 
-# 
 def parse_args():
     p = argparse.ArgumentParser(description="Run all NumericalPDE experiments.")
     p.add_argument("--list", action="store_true", help="List and exit.")
@@ -119,10 +138,12 @@ def parse_args():
                    help="Skip these experiment stems.")
     p.add_argument("--continue-on-error", action="store_true",
                    help="Keep going after a failure.")
+    p.add_argument("--no-install", action="store_true",
+                   help="Skip installing requirements.txt before running.")
     return p.parse_args()
 
 
-# THE MAIN RUNER READY TO RUN 
+# THE MAIN RUNER READY TO RUN
 def main():
     args = parse_args()
     experiments = discover()
@@ -147,6 +168,13 @@ def main():
     print(f"Project root: {PROJECT_ROOT}")
     print(f"Python:       {sys.executable}")
     print(f"Experiments:  {len(experiments)}")
+
+    # Install dependencies before running anything
+    if not args.no_install:
+        if not install_requirements() and not args.continue_on_error:
+            print("Stopping because requirements installation failed "
+                  "(use --continue-on-error to override).")
+            return 1
 
     results = []
     t_start = time.perf_counter()

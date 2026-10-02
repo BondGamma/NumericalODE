@@ -1,14 +1,5 @@
 """
 Experiment 3 — NASV Convergence Analysis
-====================================================
-Model:
-    dX_t = (mu - 0.5 * g(Y_t)^2) dt + g(Y_t) dW_t^(1)
-    dY_t = kappa (theta - Y_t) dt + xi * sqrt(1 + Y_t^2) dW_t^(2)
-    g(y) = sigma_min + (sigma_max - sigma_min) / (1 + exp(-y))
-    d<W^(1), W^(2)>_t = rho dt
-
-We apply Euler–Maruyama to (X, Y) and recover S = exp(X).
-
 """
 
 import os
@@ -19,9 +10,7 @@ from scipy import stats
 import warnings
 warnings.filterwarnings("ignore")
 
-# ============================================================
-# 1. MODEL PARAMETERS
-# ============================================================
+
 S0        = 100.0
 Y0        = 0.0
 mu        = 0.05
@@ -35,10 +24,7 @@ T         = 1.0
 
 FIG_DIR = "figures"
 
-
-# ============================================================
-# 2. HELPERS
-# ============================================================
+# HELPERS
 def g(y):
     return sigma_min + (sigma_max - sigma_min) / (1.0 + np.exp(-y))
 
@@ -48,8 +34,8 @@ def g_prime(y):
     return (sigma_max - sigma_min) * s * (1.0 - s)
 
 
-def simulate_nasv(n_steps, n_paths, seed=None):
-    """Standalone EM for the distribution check only."""
+def simulate_nasv(n_steps, n_paths, seed=None): #checking em distro 
+
     rng = np.random.default_rng(seed)
     dt = T / n_steps
     sqrt_dt = np.sqrt(dt)
@@ -76,8 +62,7 @@ def simulate_nasv(n_steps, n_paths, seed=None):
     return np.exp(X[:, -1]), X, Y
 
 
-def _fine_increments(n_fine, n_paths, seed, dtype=np.float64):
-    """Generate fine Brownian increments once. dtype=float32 for speed."""
+def _fine_increments(n_fine, n_paths, seed, dtype=np.float64): #GBM increments
     rng = np.random.default_rng(seed)
     dt_fine = T / n_fine
     sq = dtype(T / n_fine) ** dtype(0.5) if False else np.sqrt(np.array(dt_fine, dtype=dtype))
@@ -89,7 +74,7 @@ def _fine_increments(n_fine, n_paths, seed, dtype=np.float64):
 
 
 def _em_path_from_increments(dW1, dW2, dt, dtype=np.float64):
-    """EM on the NASV system from supplied increments. Arithmetic in dtype."""
+
     n_paths, n_steps = dW1.shape
     X = np.full(n_paths, np.log(S0), dtype=dtype)
     Y = np.full(n_paths, Y0, dtype=dtype)
@@ -102,8 +87,7 @@ def _em_path_from_increments(dW1, dW2, dt, dtype=np.float64):
     return X, Y
 
 
-def _em_coarse_from_fine(dW1_fine, dW2_fine, n_coarse, dtype=np.float64):
-    """Coarse EM path driven by the SAME fine increments, summed into blocks."""
+def _em_coarse_from_fine(dW1_fine, dW2_fine, n_coarse, dtype=np.float64): #rough EM paths
     n_fine = dW1_fine.shape[1]
     if n_fine % n_coarse != 0:
         raise ValueError(f"n_fine={n_fine} must be a multiple of n={n_coarse}")
@@ -128,9 +112,7 @@ def _em_coarse_from_fine(dW1_fine, dW2_fine, n_coarse, dtype=np.float64):
     return X, Y
 
 
-# ============================================================
-# 3. STRONG CONVERGENCE (unchanged design)
-# ============================================================
+# STRONG CONVERGENCE
 def strong_convergence_experiment(
     n_steps_list=(4, 8, 16, 32, 64),
     n_paths=2000,
@@ -184,13 +166,12 @@ def strong_convergence_experiment(
     }
 
 
-# ============================================================
-# 4. WEAK CONVERGENCE (batched + float32)
-# ============================================================
+
+# 4. WEAK CONVERGENCE
 def _weak_batch(batch_size, n_steps_list, n_fine_ref, n_fine_ref_check,
                 K, seed_batch, dtype):
     """Run one batch of the weak experiment. Returns per-path payoffs."""
-    # Generate the Brownian path at the check grid — this is the ONLY RNG.
+    
     dW1_ck, dW2_ck, _ = _fine_increments(n_fine_ref_check, batch_size,
                                           seed_batch, dtype=dtype)
 
@@ -199,7 +180,7 @@ def _weak_batch(batch_size, n_steps_list, n_fine_ref, n_fine_ref_check,
                                        dtype=dtype)
     payoff_A = np.maximum(np.exp(X_A.astype(np.float64, copy=False)) - K, 0.0)
 
-    # Downsample to the main grid (contiguous pair/block sums)
+
     ratio = n_fine_ref_check // n_fine_ref
     dW1_lo = dW1_ck.reshape(batch_size, n_fine_ref, ratio).sum(axis=2)
     dW2_lo = dW2_ck.reshape(batch_size, n_fine_ref, ratio).sum(axis=2)
@@ -210,7 +191,7 @@ def _weak_batch(batch_size, n_steps_list, n_fine_ref, n_fine_ref_check,
                                        dtype=dtype)
     payoff_B = np.maximum(np.exp(X_B.astype(np.float64, copy=False)) - K, 0.0)
 
-    # Coarse levels reuse dW_lo
+    # making rough changes in dW (in other words it coarses)
     coarse = {}
     for n in n_steps_list:
         Xc, _ = _em_coarse_from_fine(dW1_lo, dW2_lo, n, dtype=dtype)
@@ -229,11 +210,8 @@ def weak_convergence_experiment(
     seed=123,
     dtype=np.float32,
 ):
-    """Weak error of the European call payoff  E[(S_T - K)^+].
-
-    Batched + float32 for speed. CRN and reference-agreement logic are
-    identical to the unbunched version.
-    """
+#Weak error of the European call payoff
+    
     if n_fine_ref_check % n_fine_ref != 0:
         raise ValueError("n_fine_ref_check must be a multiple of n_fine_ref")
     if n_paths % batch_size != 0:
@@ -251,7 +229,7 @@ def weak_convergence_experiment(
 
     t_start = time.perf_counter()
 
-    # Accumulators
+    # colectors
     payoffs_A = np.empty(n_paths, dtype=np.float64)
     payoffs_B = np.empty(n_paths, dtype=np.float64)
     coarse_all = {n: np.empty(n_paths, dtype=np.float64) for n in n_steps_list}
@@ -337,9 +315,7 @@ def weak_convergence_experiment(
     }
 
 
-# ============================================================
-# 5. DISTRIBUTION CHECK
-# ============================================================
+#  DISTRIBUTION CHECK
 def distribution_check(n_steps=256, n_paths=100000, seed=7):
     print("=" * 60)
     print("DISTRIBUTION CHECK AT T=1")
@@ -392,9 +368,8 @@ def distribution_check(n_steps=256, n_paths=100000, seed=7):
     print(f"  Fraction S_T > 0  = {np.mean(S > 0):.6f}\n")
 
 
-# ============================================================
-# 6. PLOTS
-# ============================================================
+# PLOTS and AI magic 
+
 def plot_convergence(strong_res, weak_res):
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
@@ -434,9 +409,6 @@ def plot_convergence(strong_res, weak_res):
     print(f"Saved {FIG_DIR}/exp3_nasv_convergence.png\n")
 
 
-# ============================================================
-# 7. MAIN
-# ============================================================
 if __name__ == "__main__":
     print("=" * 60)
     print("NASV CONVERGENCE ANALYSIS — Experiment 3")
