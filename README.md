@@ -18,7 +18,7 @@ initial value problems.
 
 ## Current status
 
-_Last updated 2026-09-27._
+_Last updated 2026-10-03._
 
 | Workstream | Status | Where |
 |---|---|---|
@@ -27,7 +27,7 @@ _Last updated 2026-09-27._
 | Experiment 2 — GBM positivity analysis | ✅ Done | implemented|
 | Experiment 3 — NASV convergence analysis | ✅ Done	 | implemented  |
 | Experiment 4 — cost vs. accuracy analysis | ✅ Done	 |  implemented  |
-| `run_all.py` entry point | ✅ Done | Will add pip Requirements later |
+| `run_all.py` entry point | ✅ Done | Up and running |
 | Slides & report | 🚧 Draft | `report/projection_1.tex` |
 
 
@@ -43,12 +43,9 @@ python3 -m venv .venv
 source .venv/bin/activate    # macOS / Linux
 .venv\Scripts\activate       # Windows
 
-# 3. run an experiment (run_all.py is not wired up yet)
+# 3. run everything
 python3 code/run_all.py
 ```
-Generated figures are written to `figures/`; the final ones get copied into
-`report/`. LaTeX build artefacts (`.aux`, `.log`, `.toc`, `.bbl`, `.blg`) are
-ignored by `.gitignore`.
 
 ## Who does what
 
