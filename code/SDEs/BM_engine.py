@@ -1,28 +1,5 @@
-"""
-Brownian-motion engine — Direction 4 (problem pack Section 4).
+#Brownian-motion engine
 
-Two simulators, one for each SDE model:
-
-  (1) standard_bm         a single independent standard Brownian motion
-                          (drives GBM):
-                              dW_n = sqrt(dt) Z_n,  Z_n iid N(0, 1)
-
-  (2) correlated_bm_pair  a correlated pair (W^(1), W^(2)) with
-                          d<W^(1), W^(2)>_t = rho dt (drives NA-SV):
-                              dW1_n = sqrt(dt) Z1_n
-                              dW2_n = sqrt(dt) (rho Z1_n + sqrt(1 - rho^2) Z2_n)
-                          with Z1, Z2 iid N(0, 1), so that
-                          corr(dW1, dW2) = rho and Var(dW2) = dt.
-
-Both return arrays of shape (n_paths, n_steps).
-
-The engine also provides the "same Brownian motion" extracter/generaliser,
-extract_dw: given fine increments at the maximum resolution n_max (the last
-axis), it sums blocks of fine increments to produce the increments at any
-coarser step count n (which must divide n_max).  Every coarse increment is a
-sum of fine increments, so all step sizes see the SAME underlying Brownian
-path — what makes strong-convergence comparisons across dt meaningful.
-"""
 
 import numpy as np
 
@@ -65,7 +42,7 @@ def extract_dw(dw_log, n_steps):
 
     This is the "same Brownian motion" extracter/generaliser: given increments
     at the finest resolution n_max (the last axis of `dw_log`), return the
-    increments at a coarser resolution n_steps, where each coarse increment is
+    increments at a ROUGHER (coarse) resolution n_steps, where each coarse increment is
     the sum of `n_max / n_steps` consecutive fine increments.  Summing in this
     way guarantees every step size shares the SAME underlying Brownian path
     (the coarse path is exactly the fine path sampled at the coarse grid), so

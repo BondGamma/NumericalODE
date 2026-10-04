@@ -1,6 +1,5 @@
 """
-Non-affine stochastic-volatility (NA-SV) model — Direction 4 (problem pack
-Section 4).
+Non-affine stochastic-volatility (NA-SV) model.
 
     dX_t = (mu - g(Y_t)^2 / 2) dt + g(Y_t) dW_t^(1)
     dY_t = kappa (theta - Y_t) dt + xi sqrt(1 + Y_t^2) dW_t^(2)

@@ -1,5 +1,5 @@
 """
-Geometric Brownian motion (GBM) — Direction 4 of the problem pack (Section 4).
+Geometric Brownian motion (GBM)
 
     dS = mu S dt + sigma S dW
 

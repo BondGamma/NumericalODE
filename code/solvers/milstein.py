@@ -7,10 +7,7 @@ strong order from 1/2 (Euler-Maruyama) to 1:
     gbm:  S_{n+1} = S_n + mu S_n dt + sigma S_n dW_n
                     + (1/2) sigma^2 S_n (dW_n^2 - dt)
 
-For "nasv" this solver deliberately refuses to run: the scalar Milstein result
-does not extend to that two-noise system (a full multidimensional Milstein
-method needs cross terms and simulated iterated stochastic integrals — see the
-problem pack).  Use Euler-Maruyama for NA-SV.
+Use Euler-Maruyama for NA-SV.
 """
 
 import numpy as np
@@ -23,8 +20,7 @@ _MODELS = ("gbm", "nasv")
 def milstein_step(model, state, dt, dW, **params):
     """One Milstein step for `model`.
 
-    Only "gbm" is supported; "nasv" raises NotImplementedError (see the module
-    docstring for why).
+    Only "gbm" is supported; "nasv" raises NotImplementedError 
     """
     if model == "gbm":
         S = state
