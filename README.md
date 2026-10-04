@@ -35,7 +35,7 @@ _Last updated 2026-10-03._
 
 ```bash
 # 1. clone
-git clone <repo-url>
+git clone git@github.com:BondGamma/NumericalPDE.git
 cd NumericalPDE
 
 # 2. create + activate a virtual environment
