@@ -18,6 +18,28 @@ def standard_bm(n_steps, dt, n_paths=1, seed=None):
     return np.sqrt(dt) * Z
 
 
+def standard_bm_chunks(n_steps, dt, n_paths, batch_size, seed=None):
+    """Yield independent standard Brownian increments in batches.
+
+    Equivalent to `standard_bm(n_steps, dt, n_paths, seed)` split along the
+    path axis: concatenating the yielded chunks reproduces the single-shot
+    array exactly (the same `default_rng(seed)` draws the same normals in the
+    same row-major order).  This lets large path ensembles be processed at
+    bounded memory, one `(batch, n_steps)` float64 chunk at a time.
+
+    Yields
+    ------
+    dW : ndarray, shape (batch, n_steps)
+        `sqrt(dt) * Z`, `Z` iid N(0, 1); the final chunk may be smaller than
+        `batch_size` when `n_paths` is not a multiple of it.
+    """
+    rng = np.random.default_rng(seed)
+    for start in range(0, n_paths, batch_size):
+        m = min(batch_size, n_paths - start)
+        Z = rng.standard_normal((m, n_steps))
+        yield np.sqrt(dt) * Z
+
+
 def correlated_bm_pair(n_steps, dt, rho, n_paths=1, seed=None):
     """Correlated increments (dW1, dW2) with correlation rho.
 
