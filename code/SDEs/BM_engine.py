@@ -59,6 +59,30 @@ def correlated_bm_pair(n_steps, dt, rho, n_paths=1, seed=None):
     return dW1, dW2
 
 
+def correlated_bm_chunks(n_steps, dt, rho, n_paths, batch_size, seed=None):
+    """Yield correlated increments (dW1, dW2) in batches.
+
+    Batched analogue of `correlated_bm_pair`: equivalent to generating the whole
+    `(n_paths, n_steps)` pair once and splitting along the path axis (the same
+    `default_rng(seed)` draws the same normals in the same row-major order), so
+    large path ensembles can be processed at bounded memory.
+
+    Yields
+    ------
+    dW1, dW2 : ndarray, each of shape (batch, n_steps)
+        Correlated increments with corr(dW1, dW2) = rho and Var(dW2) = dt; the
+        final chunk may be smaller than `batch_size`.
+    """
+    rng = np.random.default_rng(seed)
+    for start in range(0, n_paths, batch_size):
+        m = min(batch_size, n_paths - start)
+        Z1 = rng.standard_normal((m, n_steps))
+        Z2 = rng.standard_normal((m, n_steps))
+        dW1 = np.sqrt(dt) * Z1
+        dW2 = np.sqrt(dt) * (rho * Z1 + np.sqrt(1.0 - rho * rho) * Z2)
+        yield dW1, dW2
+
+
 def extract_dw(dw_log, n_steps):
     """Coarsen fine Brownian increments to `n_steps` steps by summing blocks.
 
