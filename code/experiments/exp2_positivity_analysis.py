@@ -1,20 +1,4 @@
-"""
-Experiment 2 — Positivity-Preserving Analysis of Geometric Brownian Motion
-==========================================================================
-Model:
-    dS = mu S dt + sigma S dW,   S(0) = S0 > 0
-    S(t) = S0 exp((mu - 1/2 sigma^2) t + sigma W(t))     (exact, always > 0)
-
-Discretising the price directly:
-    S_{n+1} = S_n + mu S_n dt + sigma S_n dW_n                        (EM)
-    S_{n+1} = S_n + mu S_n dt + sigma S_n dW_n
-              + 1/2 sigma^2 S_n (dW_n^2 - dt)                         (Milstein)
-
-With the benchmark (mu=0.05, sigma=0.20) negativity is practically invisible,
-so all experiments run in a *stress regime* sigma = 2.0 to expose the effect.
-
-
-"""
+# Experiment 2 — Positivity-Preserving Analysis of Geometric Brownian Motion
 
 import os
 import sys
@@ -22,36 +6,30 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import norm
 
-# --- repo imports: match exp1's style --------------------------------------
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 from code.SDEs.BM_engine import standard_bm, extract_dw
 from code.solvers import em, milstein
 
-# ============================================================================
-# 1. PARAMETERS
-# ============================================================================
-S0    = 100.0     # initial price (does not affect the sign analysis)
-MU    = 0.05      # drift (kept from the benchmark)
+#Parameters
+S0    = 100.0     # initial price
+MU    = 0.05      # drift
 T     = 1.0       # horizon
-SIGMA = 2.0       # stress-test volatility (10x the benchmark 0.20)
+SIGMA = 2.0       # volatility 
 
-DT_C  = 1.0 / (SIGMA**2 - 2.0 * MU)   # Milstein positivity threshold
+DT_C  = 1.0 / (SIGMA**2 - 2.0 * MU)   # Milstein positivity 
 
 FIGURES_DIR = "figures"
 os.makedirs(FIGURES_DIR, exist_ok=True)
 
 
-# ============================================================================
-# 2.  HELPERS
-# ============================================================================
+
+# Helpers
 def p_em(dt):
-    """Per-step EM negativity probability   Phi(-(1 + mu dt) / (sigma sqrt(dt)))."""
     dt = np.asarray(dt, dtype=float)
-    return norm.cdf(-(1.0 + MU * dt) / (SIGMA * np.sqrt(dt)))
+    return norm.cdf(-(1.0 + MU * dt) / (SIGMA * np.sqrt(dt))) #probability per step, like how negative it is
 
 
 def milstein_roots(dt, mu=MU, sigma=SIGMA):
-    """Roots of the Milstein bracket g(z); empty if D <= 0."""
     d = (sigma**2 - 2.0 * mu) * dt - 1.0
     if d <= 0:
         return np.array([])
@@ -60,14 +38,13 @@ def milstein_roots(dt, mu=MU, sigma=SIGMA):
 
 
 def milstein_g(z, dt, mu=MU, sigma=SIGMA):
-    """Milstein bracket g(z) = (sigma^2 dt / 2) z^2 + sigma sqrt(dt) z + c."""
     return ((0.5 * sigma**2 * dt) * z**2
             + (sigma * np.sqrt(dt)) * z
             + (1.0 + (mu - 0.5 * sigma**2) * dt))
 
 
 def p_mil_scalar(dt):
-    """Milstein per-step negativity probability at a single dt."""
+#probability at single dt
     d = (SIGMA**2 - 2.0 * MU) * dt - 1.0
     if d <= 0:
         return 0.0
@@ -77,7 +54,7 @@ def p_mil_scalar(dt):
 
 
 def p_mil_vec(dt):
-    """Vectorised Milstein per-step negativity probability."""
+    #same as above just vectorized
     dt = np.asarray(dt, dtype=float)
     out = np.zeros_like(dt)
     d = (SIGMA**2 - 2.0 * MU) * dt - 1.0
@@ -90,21 +67,15 @@ def p_mil_vec(dt):
 
 
 def eu_put_call(S0_, K, T_, mu, sigma):
-    """Closed-form E[(S_T-K)^+] and E[(K-S_T)^+] for lognormal S_T."""
     d1 = (np.log(S0_ / K) + (mu + 0.5 * sigma**2) * T_) / (sigma * np.sqrt(T_))
     d2 = d1 - sigma * np.sqrt(T_)
     call = S0_ * np.exp(mu * T_) * norm.cdf(d1) - K * norm.cdf(d2)
     put  = K * norm.cdf(-d2) - S0_ * np.exp(mu * T_) * norm.cdf(-d1)
     return call, put
 
-
-# ============================================================================
-# 3. MONTE-CARLO / SIMULATION HELPERS
-# ============================================================================
 def run_mc(dt, M, seed):
-    """Per-step and path-level negativity rates for EM / Milstein."""
     n = int(round(T / dt))
-    dW = standard_bm(n, dt, M, seed=seed)          # (M, n)
+    dW = standard_bm(n, dt, M, seed=seed)
 
     S_em = np.full(M, S0);  ever_em = np.zeros(M, bool)
     S_mi = np.full(M, S0);  ever_mi = np.zeros(M, bool)
@@ -124,8 +95,8 @@ def run_mc(dt, M, seed):
                 em_ever=ever_em.mean(), mil_ever=ever_mi.mean())
 
 
+#Terminal S_T under EM / Milstein / exact on the SAME Brownian increments
 def simulate_terminal(dt, M, seed):
-    """Terminal S_T under EM / Milstein / exact on the SAME Brownian increments."""
     n = int(round(T / dt))
     dW = standard_bm(n, dt, M, seed=seed)
     S_em = np.full(M, S0);  S_mi = np.full(M, S0);  S_ex = np.full(M, S0)
@@ -137,7 +108,7 @@ def simulate_terminal(dt, M, seed):
 
 
 def coarse_run(dW_fine, n):
-    """Coarse EM/Milstein path using the summed increments of a fine Brownian path."""
+#generates rough paths for Brownian motion increments
     dW = extract_dw(dW_fine, n)
     S_em = S0;  S_mi = S0
     em_path = [S0];  mi_path = [S0]
@@ -148,9 +119,7 @@ def coarse_run(dW_fine, n):
     return np.array(em_path), np.array(mi_path)
 
 
-# ============================================================================
-# 4. EM FAILURE REGION ON N(0, 1)
-# ============================================================================
+#EM FAILURE REGION ON N(0, 1)
 def section_em_analysis():
     print("=" * 70)
     print("EM — failure region on the standard-normal density")
@@ -180,9 +149,7 @@ def section_em_analysis():
     print(f"Saved {out}\n")
 
 
-# ============================================================================
-# 5. MILSTEIN FAILURE REGION
-# ============================================================================
+# MILSTEIN FAILURE REGION
 def section_milstein_analysis():
     print("=" * 70)
     print("Milstein — failure region on the parabola and on N(0, 1)")
@@ -190,7 +157,7 @@ def section_milstein_analysis():
     z = np.linspace(-6, 4, 800)
     fig, axes = plt.subplots(1, 2, figsize=(11, 4.2))
 
-    # Case (a): dt < dt_c -> parabola never crosses zero
+    # Case (a): dt < dt_c  parabola never crosses zero
     dt_a = 0.25
     ax = axes[0]
     ax.plot(z, milstein_g(z, dt_a), color="C0", lw=2, label="$g(z)$")
@@ -200,7 +167,7 @@ def section_milstein_analysis():
     ax.set_xlabel("$z$"); ax.set_ylabel("$g(z)$"); ax.set_ylim(-0.05, 3.0)
     ax.grid(True, ls=":", alpha=0.5); ax.legend()
 
-    # Case (b): dt > dt_c -> parabola dips below 0 between the roots
+    # Case (b): dt > dt_c parabola dips below 0 between the roots
     dt_b = 0.5
     r1, r2 = milstein_roots(dt_b)
     ax = axes[1]
@@ -244,9 +211,7 @@ def section_milstein_analysis():
     print(f"Saved {out2}\n")
 
 
-# ============================================================================
-# 6. STRESS-TEST THEORY TABLE
-# ============================================================================
+# STRESS-TEST THEORY TABLE
 def section_stress_theory():
     print("=" * 70)
     print("Stress-regime theory: sigma^2 - 2 mu = %.3f  ->  dt_c = %.5f"
@@ -271,9 +236,7 @@ def section_stress_theory():
     print()
 
 
-# ============================================================================
-# 7. EXPERIMENT A — MC NEGATIVITY STATISTICS
-# ============================================================================
+#EXPERIMENT A — MC NEGATIVITY STATISTICS
 def section_mc_tables(M=1_000_000):
     print("=" * 70)
     print(f"Experiment A — Monte-Carlo negativity vs dt  (M = {M:,} paths)")
@@ -312,9 +275,7 @@ def section_mc_tables(M=1_000_000):
     return rows
 
 
-# ============================================================================
-# 8. EXPERIMENT B — NEGATIVITY PROBABILITY vs dt
-# ============================================================================
+# EXPERIMENT B — NEGATIVITY PROBABILITY vs chang e in time
 def section_negativity_vs_dt(rows):
     print("=" * 70)
     print("Experiment B — negativity probability vs dt (curves + MC markers)")
@@ -329,7 +290,7 @@ def section_negativity_vs_dt(rows):
 
     fig, axes = plt.subplots(1, 2, figsize=(11, 4.2))
 
-    # Left: per-step bracket negativity
+    # Left per-step bracket negativity
     ax = axes[0]
     ax.semilogx(dt_dense, p_em(dt_dense), color="C0", lw=2,
                 label=r"EM  $p_{\mathrm{EM}}$")
@@ -345,7 +306,7 @@ def section_negativity_vs_dt(rows):
     ax.set_title(r"Per-step $p(\Delta t)$")
     ax.legend(loc="lower left"); ax.grid(True, ls=":", alpha=0.5)
 
-    # Right: path-level P(ever negative)
+    # Right path-level P
     n_dense = 1.0 / dt_dense
     ax = axes[1]
     ax.semilogx(dt_dense, 1.0 - (1.0 - p_em(dt_dense)) ** n_dense,
@@ -369,16 +330,14 @@ def section_negativity_vs_dt(rows):
     print(f"Saved {out}\n")
 
 
-# ============================================================================
-# 9. EXPERIMENT C — A PATH WHERE EM GOES NEGATIVE
-# ============================================================================
+#EXPERIMENT C FOR PATH WHERE EM NEGATIVE
 def section_negative_path():
     print("=" * 70)
     print("Experiment C — a path where EM goes negative but exact/Milstein stay positive")
     print("=" * 70)
     n_fine = 512
     dt_fine = T / n_fine
-    n_coarse = 16                 # dt = 0.0625 < dt_c  =>  Milstein stays positive
+    n_coarse = 16                 # dt = 0.0625 < dt_c    Milstein stays positive
 
     best_seed = None
     best_min = np.inf
@@ -434,10 +393,7 @@ def section_negative_path():
           % (seed, em_path.min(), mi_path.min(), S_ex.min()))
     print()
 
-
-# ============================================================================
-# 10. OPTION PRICES — EFFECT OF NEGATIVE SAMPLES
-# ============================================================================
+# OPTION PRICES — EFFECT OF NEGATIVE SAMPLES
 def section_option_prices(M=1_000_000, K=100.0):
     print("=" * 70)
     print("Option prices — isolating the impact of negative samples")
@@ -447,7 +403,7 @@ def section_option_prices(M=1_000_000, K=100.0):
     print("Analytic expectation:  call E[(S_T-K)^+] = %.4f    "
           "put E[(K-S_T)^+] = %.4f\n" % (call_ref, put_ref))
 
-    # --- OPTION Put decomposition ------------------------------------------------
+    # --- Put decomposition ------------------------------------------------
     print("PUT — raw vs floored S_T (gap = E[|S_T| 1{S_T<0}] = pure negativity) :")
     print("  dt        n   scheme    P(S_T<0)   put raw   put floor    gap      analytic")
     for dt in [1.0, 0.5, 1/3, 0.25, 0.1]:
@@ -475,10 +431,6 @@ def section_option_prices(M=1_000_000, K=100.0):
                  call_ref))
     print()
 
-
-# ============================================================================
-# 11. MAIN
-# ============================================================================
 def main():
     print("=" * 70)
     print("EXPERIMENT 2 — Positivity-preserving analysis of GBM")
