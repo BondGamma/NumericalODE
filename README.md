@@ -15,11 +15,7 @@ initial value problems.
 > The implementation has grown into **stochastic** differential equations
 > (SDEs) — Brownian motion, geometric Brownian motion, and a noise-assisted
 > stochastic-volatility model — solved with Euler–Maruyama and Milstein.
-
-
 <video src="https://github.com/BondGamma/NumericalPDE/blob/main/monte_carlo_simulation.mp4"></video>
-
-
 ## Current status
 
 _Last updated 2026-10-03._
